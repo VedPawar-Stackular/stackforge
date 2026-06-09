@@ -1,8 +1,8 @@
 """
 Stitch MCP diagnostic — lists available tools and tests create_project.
 
-Run from c:\\StackForge\\poc\\ in a terminal where `npx` is available:
-    python debug_stitch.py
+Run from the poc/ directory:
+    python scripts/debug_stitch.py
 
 This tells you exactly which tool names the installed stitch-mcp-server exposes
 so stitch_designer.py can be updated with the correct names.
@@ -13,7 +13,8 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Allow imports from poc/ root
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from dotenv import load_dotenv
 load_dotenv()
 
