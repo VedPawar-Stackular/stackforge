@@ -27,6 +27,7 @@ class ProjectStatusResponse(BaseModel):
     status: str
     document_count: int
     ready_count: int
+    failed_count: int = 0
     requirement_count: int
     clarification_count: int
 
@@ -39,6 +40,7 @@ class DocumentResponse(BaseModel):
     file_type: str
     status: str
     uploaded_at: datetime
+    error_message: Optional[str] = None
 
 
 # ─── Requirements ────────────────────────────────────────────────────────────
@@ -105,6 +107,69 @@ class DocEditRequest(BaseModel):
 class DocEditResponse(BaseModel):
     topic: str
     content: str
+
+
+# ─── Stage 2: Epics & User Stories ───────────────────────────────────────────
+
+class EpicResponse(BaseModel):
+    id: UUID
+    title: str
+    description: str
+    theme: str
+    story_count: int
+    ado_work_item_id: Optional[int]
+    ado_work_item_url: Optional[str]
+    created_at: datetime
+
+
+class StoryResponse(BaseModel):
+    id: UUID
+    epic_id: UUID
+    title: str
+    description: str
+    acceptance_criteria: list[str]
+    story_points: Optional[int]
+    assignee: Optional[str]
+    ado_work_item_id: Optional[int]
+    ado_work_item_url: Optional[str]
+    status: str
+    created_at: datetime
+
+
+class Stage2StatusResponse(BaseModel):
+    status: str           # idle | generating | ready | failed
+    epic_count: int
+    story_count: int
+    ado_pushed: bool
+
+
+class MetricsStep(BaseModel):
+    step: str
+    model: str
+    tier: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    duration_ms: int
+    why_this_model: str
+
+
+class Stage2MetricsResponse(BaseModel):
+    actual_cost_usd: float
+    naive_cost_usd: float
+    savings_pct: float
+    tokens_saved: int
+    actual_input_tokens: int
+    actual_output_tokens: int
+    naive_input_tokens: int
+    naive_output_tokens: int
+    steps: list[MetricsStep]
+
+
+class AdoPushResponse(BaseModel):
+    epics_pushed: int
+    stories_pushed: int
+    errors: list[str]
 
 
 # ─── Google Stitch ────────────────────────────────────────────────────────────

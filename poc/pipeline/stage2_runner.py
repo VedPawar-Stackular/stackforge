@@ -1,0 +1,266 @@
+"""
+Stage 2 orchestrator.
+
+Runs the full epic + story generation pipeline, writes results to DB,
+and exposes a separate push_to_ado() function for on-demand ADO sync.
+
+Flow:
+  1. Fetch requirements from DB (all columns needed for story generation)
+  2. epic_generator: cheap model groups titles into epics → log metrics
+  3. Insert epics into DB
+  4. story_generator: mid model generates stories per epic in parallel → log metrics
+  5. Insert user stories into DB
+  6. Mark project stage2_status = 'ready'
+
+ADO push is intentionally separate — generation and sync are decoupled so
+the lead engineer can review stories before pushing.
+"""
+
+import uuid
+
+from db import DB
+from pipeline.epic_generator import generate_epics
+from pipeline.story_generator import generate_stories_for_all_epics
+
+
+def _text_array_literal(items: list[str]) -> str:
+    """Convert a Python list to a PostgreSQL TEXT[] literal string for pg8000."""
+    if not items:
+        return "{}"
+    escaped = []
+    for item in items:
+        # Escape backslashes first, then double quotes, then strip newlines
+        item = item.replace("\\", "\\\\").replace('"', '\\"')
+        item = item.replace("\n", " ").replace("\r", "")
+        escaped.append(f'"{item}"')
+    return "{" + ",".join(escaped) + "}"
+
+
+async def run_stage2(project_id: str) -> dict:
+    """
+    Run the full Stage 2 pipeline for a project.
+    Returns {epic_count, story_count}.
+    Raises ValueError if no requirements exist.
+    """
+    with DB() as db:
+        db.execute(
+            "UPDATE projects SET stage2_status = 'generating' WHERE id = %s",
+            (project_id,),
+        )
+
+    try:
+        # ── Fetch requirements ────────────────────────────────────────────────
+        with DB() as db:
+            requirements = db.fetch_all(
+                """
+                SELECT id, title, req_type, sdlc_topic, description
+                FROM requirements
+                WHERE project_id = %s
+                ORDER BY created_at
+                """,
+                (project_id,),
+            )
+
+        if not requirements:
+            raise ValueError("No requirements found — run Stage 1 first")
+
+        # pg8000 returns UUID objects; convert to strings for JSON handling
+        for r in requirements:
+            r["id"] = str(r["id"])
+
+        requirements_by_id = {r["id"]: r for r in requirements}
+
+        # ── Step 1: Epic decomposition (cheap model, titles only) ────────────
+        epics, epic_in_tok, epic_out_tok, epic_dur = await generate_epics(requirements)
+
+        _log_metrics(project_id, "epic_decomposition", epic_in_tok, epic_out_tok, epic_dur)
+
+        if not epics:
+            raise ValueError("Epic generation returned empty results — check Groq API key")
+
+        # ── Insert epics into DB ──────────────────────────────────────────────
+        epic_rows: list[dict] = []
+        with DB() as db:
+            for epic in epics:
+                epic_id = str(uuid.uuid4())
+                req_ids = [str(rid) for rid in epic.get("requirement_ids", [])]
+                # pg8000 UUID[] literal pattern (same as source_document_ids in runner.py)
+                req_ids_literal = "{" + ",".join(req_ids) + "}"
+                db.execute(
+                    """
+                    INSERT INTO epics
+                        (id, project_id, title, description, theme, requirement_ids)
+                    VALUES (%s, %s, %s, %s, %s, %s::uuid[])
+                    """,
+                    (
+                        epic_id,
+                        project_id,
+                        epic.get("title", "Untitled Epic"),
+                        epic.get("description", ""),
+                        epic.get("theme", "general"),
+                        req_ids_literal,
+                    ),
+                )
+                epic["id"] = epic_id
+                epic_rows.append(epic)
+
+        # ── Step 2: Story generation (mid model, per epic, parallel) ─────────
+        results = await generate_stories_for_all_epics(epic_rows, requirements_by_id)
+
+        total_stories = 0
+        with DB() as db:
+            for i, (epic, stories, story_in_tok, story_out_tok, story_dur) in enumerate(results):
+                if story_dur > 0:
+                    _log_metrics(
+                        project_id,
+                        f"story_generation_epic_{i + 1}",
+                        story_in_tok,
+                        story_out_tok,
+                        story_dur,
+                    )
+                for story in stories:
+                    story_id = str(uuid.uuid4())
+                    ac_list = story.get("acceptance_criteria") or []
+                    db.execute(
+                        """
+                        INSERT INTO user_stories
+                            (id, epic_id, project_id, title, description,
+                             acceptance_criteria, story_points, assignee)
+                        VALUES (%s, %s, %s, %s, %s, %s::text[], %s, %s)
+                        """,
+                        (
+                            story_id,
+                            epic["id"],
+                            project_id,
+                            story.get("title", "Untitled Story"),
+                            story.get("description", ""),
+                            _text_array_literal(ac_list),
+                            story.get("story_points"),
+                            story.get("assignee"),
+                        ),
+                    )
+                    total_stories += 1
+
+        with DB() as db:
+            db.execute(
+                "UPDATE projects SET stage2_status = 'ready' WHERE id = %s",
+                (project_id,),
+            )
+
+        return {"epic_count": len(epic_rows), "story_count": total_stories}
+
+    except Exception:
+        with DB() as db:
+            db.execute(
+                "UPDATE projects SET stage2_status = 'failed' WHERE id = %s",
+                (project_id,),
+            )
+        raise
+
+
+def push_to_ado(project_id: str) -> dict:
+    """
+    Push all epics and user stories to Azure DevOps.
+
+    This is a synchronous operation — it uses httpx.Client (sync) and runs
+    sequentially: epics first, then their child stories.
+    Returns {epics_pushed, stories_pushed, errors[]}.
+    """
+    from config import ADO_ORG, ADO_PAT, ADO_PROJECT
+    from pipeline.ado_client import create_epic, create_user_story
+
+    if not all([ADO_ORG, ADO_PROJECT, ADO_PAT]):
+        raise ValueError(
+            "ADO_ORG, ADO_PROJECT, and ADO_PAT must be set in poc/.env "
+            "before pushing to Azure DevOps"
+        )
+
+    with DB() as db:
+        epics = db.fetch_all(
+            "SELECT * FROM epics WHERE project_id = %s ORDER BY created_at",
+            (project_id,),
+        )
+
+    epics_pushed = 0
+    stories_pushed = 0
+    errors: list[str] = []
+
+    for epic in epics:
+        epic_id = str(epic["id"])
+        try:
+            # Skip epics already pushed — prevents duplicates on re-push
+            if epic.get("ado_work_item_id"):
+                ado_epic_url = epic["ado_work_item_url"]
+            else:
+                ado_epic_id, ado_epic_url = create_epic(epic["title"], epic["description"])
+                with DB() as db:
+                    db.execute(
+                        "UPDATE epics SET ado_work_item_id = %s, ado_work_item_url = %s WHERE id = %s",
+                        (ado_epic_id, ado_epic_url, epic_id),
+                    )
+                epics_pushed += 1
+
+            with DB() as db:
+                stories = db.fetch_all(
+                    "SELECT * FROM user_stories WHERE epic_id = %s ORDER BY created_at",
+                    (epic_id,),
+                )
+
+            for story in stories:
+                # Skip stories already pushed
+                if story.get("ado_work_item_id"):
+                    continue
+                try:
+                    ac = list(story.get("acceptance_criteria") or [])
+                    ado_story_id, ado_story_url = create_user_story(
+                        story["title"],
+                        story["description"],
+                        ac,
+                        story.get("story_points"),
+                        ado_epic_url,
+                    )
+                    with DB() as db:
+                        db.execute(
+                            "UPDATE user_stories SET ado_work_item_id = %s, ado_work_item_url = %s WHERE id = %s",
+                            (ado_story_id, ado_story_url, str(story["id"])),
+                        )
+                    stories_pushed += 1
+                except Exception as e:
+                    errors.append(f"Story '{story['title']}': {e}")
+
+        except Exception as e:
+            errors.append(f"Epic '{epic['title']}': {e}")
+
+    return {
+        "epics_pushed": epics_pushed,
+        "stories_pushed": stories_pushed,
+        "errors": errors,
+    }
+
+
+def _log_metrics(
+    project_id: str,
+    step: str,
+    input_tokens: int,
+    output_tokens: int,
+    duration_ms: int,
+) -> None:
+    from config import MODEL_CAPABLE, MODEL_CHEAP
+    model = MODEL_CHEAP if step == "epic_decomposition" else MODEL_CAPABLE
+    with DB() as db:
+        db.execute(
+            """
+            INSERT INTO stage2_metrics
+                (id, project_id, step, model, input_tokens, output_tokens, duration_ms)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                str(uuid.uuid4()),
+                project_id,
+                step,
+                model,
+                input_tokens,
+                output_tokens,
+                duration_ms,
+            ),
+        )

@@ -87,13 +87,30 @@ async def _run_pipeline_and_update_project(
 
         await ingest_document(project_id, client_id, file_bytes, filename, file_type)
 
-        # Mark project ready if all documents are done
+        # Update project status based on live document states.
+        # Count only 'processing' as still-in-flight — failed docs must not
+        # keep the project stuck in "processing" indefinitely.
         with DB() as db:
-            pending = db.fetch_one(
-                "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s AND status != 'done'",
+            done_count = db.fetch_one(
+                "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s AND status = 'done'",
                 (project_id,),
             )["n"]
-            new_status = "ready" if pending == 0 else "processing"
+            processing_count = db.fetch_one(
+                "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s AND status = 'processing'",
+                (project_id,),
+            )["n"]
+            total_count = db.fetch_one(
+                "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s",
+                (project_id,),
+            )["n"]
+
+            if processing_count > 0:
+                new_status = "processing"
+            elif done_count == total_count:
+                new_status = "ready"
+            else:
+                new_status = "failed"
+
             db.execute(
                 "UPDATE projects SET status = %s WHERE id = %s",
                 (new_status, project_id),

@@ -44,6 +44,32 @@ PINECONE_ENABLED: bool = bool(PINECONE_API_KEY)
 # Get your key at stitch.withgoogle.com → Settings → API Keys
 STITCH_API_KEY: str = os.environ.get("STITCH_API_KEY", "")
 
+# ── Stage 2: Azure DevOps ──────────────────────────────────────────────────────
+# Set these in poc/.env to enable pushing epics and user stories to ADO.
+# ADO_ORG:     your Azure DevOps organization name (e.g. "stackular")
+# ADO_PROJECT: the project name inside that org (e.g. "StackForge")
+# ADO_PAT:     Personal Access Token with Work Items (Read & Write) scope
+ADO_ORG: str = os.environ.get("ADO_ORG", "")
+ADO_PROJECT: str = os.environ.get("ADO_PROJECT", "")
+ADO_PAT: str = os.environ.get("ADO_PAT", "")
+ADO_API_VERSION: str = "7.1"
+
+# Anthropic pricing reference (USD per 1 million tokens).
+# Used by the metrics calculator to compare actual vs naive approach cost.
+# These rates are used even when running on Groq — the calculator shows what
+# the same calls would cost on the production Anthropic API.
+PRICING: dict = {
+    "haiku":  {"input": 0.25,  "output": 1.25},   # claude-haiku-4-5
+    "sonnet": {"input": 3.00,  "output": 15.00},   # claude-sonnet-4-6
+    "opus":   {"input": 15.00, "output": 75.00},   # claude-opus-4-8
+}
+
+# Map Groq model names → Anthropic pricing tier for cost calculations
+MODEL_TIER: dict = {
+    MODEL_CHEAP:   "haiku",   # llama-3.1-8b-instant  → haiku tier
+    MODEL_CAPABLE: "sonnet",  # llama-3.3-70b-versatile → sonnet tier
+}
+
 # SDLC topic taxonomy used for requirement classification
 SDLC_TOPICS: list[str] = [
     "requirements",     # functional requirements, features, user needs, scope
