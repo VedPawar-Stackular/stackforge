@@ -1,0 +1,15 @@
+{
+  "stitch_project_id": "9301360944105217289",
+  "stitch_project_url": "https://stitch.withgoogle.com/projects/9301360944105217289",
+  "screens": [
+    {
+      "name": "patient_join",
+      "label": "Patient Join Screen",
+      "stitch_id": null,
+      "html_path": null,
+      "note": "Add manually in Stitch UI"
+    }
+  ],
+  "generated_at": "2026-06-09T06:16:25.971375+00:00",
+  "note": "Stitch project created. If screens show 'Add manually in Stitch UI', open the project in Stitch and generate screens there."
+}

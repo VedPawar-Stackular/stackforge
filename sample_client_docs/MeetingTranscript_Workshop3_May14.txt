@@ -1,0 +1,169 @@
+MEETING TRANSCRIPT -- CAREFLOW DISCOVERY WORKSHOP #3
+Date: May 14, 2026
+Time: 10:00 AM - 12:45 PM PST
+Location: MediConnect HQ, Seattle WA -- Boardroom 4B (+ Zoom bridge)
+Facilitator: Priya Sharma (Stackular Technologies)
+Note-taker: Diego Ruiz (Stackular Technologies)
+
+ATTENDEES:
+  MediConnect:
+    - Dr. Rajiv Patel (CTO)
+    - Sarah Chen (VP Engineering)
+    - Lisa Tanaka (Director of Nursing, Eastside Clinic)
+    - Marcus Webb (Revenue Cycle Manager)
+    - Carlos Diaz (IT Infrastructure Lead)
+    - Dr. Emily Rossetti (Provider representative, Portland Clinic)
+    - Jordan Kim (Patient Representative, Patient Advisory Board)
+  Stackular Technologies:
+    - Priya Sharma (Delivery Lead)
+    - Amir Hosseini (Technical Lead)
+    - Mei Tanaka (QA Lead)
+    - Diego Ruiz (Business Analyst)
+
+---------------------------------------------------------------
+SECTION 1: SCHEDULING WORKFLOW PAIN POINTS
+---------------------------------------------------------------
+
+[10:04] PRIYA SHARMA: Good morning everyone. Today is Workshop 3 -- we are focused
+on the scheduling engine and the no-show problem. Lisa, can you walk us through what
+a typical day looks like for your front desk staff at Eastside?
+
+[10:05] LISA TANAKA: Sure. So our front desk team of three opens at 7:30 AM. First
+thing they do is pull the day's schedule from the PHP portal, cross-reference it
+with Athena to check for any insurance changes or demographic updates -- that process
+alone takes about 45 minutes every morning for the three of them combined. Then they
+start calling patients who did not confirm. We send one automated email when the
+appointment is booked, but we have no reminder system after that. No SMS. Nothing
+at T-48 or T-2.
+
+[10:08] DR. EMILY ROSSETTI: And from my side as a provider, I get to clinic at 8
+and my first patient is usually at 8:30. But I do not know if the first patient is
+going to show until they actually walk in. Sometimes I do not find out a patient
+no-showed until I walk into the room and it is empty. That is a 30-minute slot gone.
+
+[10:10] MARCUS WEBB: The revenue impact is significant. A 30-min primary care slot
+is billed at about $180 on average. We have roughly 35 no-shows per day across the
+network. That is $6,300 per day, $1.57M per year in lost revenue just on no-shows.
+And we cannot always backfill because we do not have a real-time waitlist.
+
+[10:13] PRIYA SHARMA: Amir, can you speak to what CareFlow's reminder architecture
+will look like?
+
+[10:14] AMIR HOSSEINI: Yes. The reminder engine will send two automatic touches --
+SMS at 48 hours before the appointment, and again at 2 hours before. Both carry a
+one-tap confirm/cancel link. If the patient cancels, the slot is immediately returned
+to the available pool and the waitlist engine checks for patients who have requested
+that slot or that provider. The whole process is automated. Front desk does not need
+to touch it.
+
+[10:16] LISA TANAKA: A real-time waitlist would be huge. Right now we have a paper
+waitlist at each clinic. It is embarrassing honestly.
+
+[10:17] CARLOS DIAZ: How does the remind/confirm flow interact with Athena? Because
+appointment status changes need to propagate back to the EHR.
+
+[10:19] AMIR HOSSEINI: In Phase 1, CareFlow manages its own appointment state. In
+Phase 2, we wire in the Athena v2 webhook so any status change in CareFlow fires an
+update to Athena. We will need your Athena API credentials and sandbox access by
+Week 5 of the project to scope that integration properly.
+
+[10:21] DR. RAJIV PATEL: That is on us. Carlos, make a note -- we need to get
+Stackular the Athena sandbox credentials by June 27th at the latest.
+
+[10:22] CARLOS DIAZ: Noted. I will chase the Athena account manager this week.
+
+---------------------------------------------------------------
+SECTION 2: TELEHEALTH REQUIREMENTS
+---------------------------------------------------------------
+
+[10:35] PRIYA SHARMA: Let us move to telehealth. Dr. Rossetti, you have been doing
+telehealth via Teams for about 18 months now. What are the top three things that
+need to be different in CareFlow?
+
+[10:36] DR. EMILY ROSSETTI: Number one -- I need to be able to pull up the patient's
+chart during the call without switching windows. Right now I am Alt-Tabbing between
+Teams and Athena constantly. It breaks the clinical flow. Number two -- I need the
+call to be officially HIPAA-compliant. I know Teams is not covered under our BAA for
+PHI discussions. We have been taking a risk. Number three -- I want to be able to
+annotate images. Sometimes I am reviewing an X-ray with a patient and I want to draw
+on it. I cannot do that in Teams.
+
+[10:40] JORDAN KIM: As a patient, the joining process needs to be dead simple. I
+tried to do a telehealth appointment with a different provider last year and I spent
+12 minutes trying to figure out how to get into the call. By the time I got in I
+was flustered. Can we just have a link in a text message?
+
+[10:41] AMIR HOSSEINI: Absolutely. The patient flow will be: (1) you get an SMS
+15 minutes before with a single-tap join link, (2) you tap it, it opens the browser
+or app, (3) you are in the waiting room in under 30 seconds. No download required
+for web. No account password needed if you have already verified via the SMS code.
+
+[10:43] JORDAN KIM: And if the doctor is running late?
+
+[10:44] AMIR HOSSEINI: The waiting room will show an estimated wait time updated in
+real time, and if wait exceeds 15 minutes you automatically get an SMS so you can
+stay on your phone rather than sitting at your desk staring at a loading screen.
+
+[10:45] MARCUS WEBB: For billing purposes -- we need a timestamp of when the call
+actually started and ended, not just when the room was opened. The clinical time
+is what we bill. Can CareFlow provide that?
+
+[10:47] AMIR HOSSEINI: Yes, we will log provider-joined-at, patient-joined-at,
+session-ended-at, and duration in seconds. That is in the data model.
+
+[10:48] DR. RAJIV PATEL: What about recordings? We sometimes want to record sessions
+for quality review or for the patient's benefit.
+
+[10:49] AMIR HOSSEINI: Recording requires explicit patient consent captured in the
+system -- a digital checkbox with timestamp and IP. If consent is not given, the
+recording button is disabled. Recordings go to S3 encrypted at rest. Access is
+logged every time. We will not allow recording without consent -- it is a hard block.
+
+---------------------------------------------------------------
+SECTION 3: COMPLIANCE & SECURITY
+---------------------------------------------------------------
+
+[11:30] PRIYA SHARMA: Let us talk compliance. Carlos, you had flagged some specific
+concerns from the Q1 audit findings.
+
+[11:31] CARLOS DIAZ: Yes. Three findings from the Q1 audit. First: providers were
+messaging patient PHI via Microsoft Teams which is not covered under our BAA. That
+is the $45,000 fine. We need all clinical messaging to go through a system that is
+under our HIPAA umbrella. Second: we had no centralized audit trail. Each system
+kept its own log in different formats -- impossible to correlate. Third: session
+management was weak -- no automatic timeout on the PHP portal, and some providers
+share login credentials which is obviously terrible.
+
+[11:35] AMIR HOSSEINI: CareFlow addresses all three. Secure in-app messaging under
+the Twilio HIPAA BAA. Centralized Elasticsearch audit log -- every PHI access event,
+every action, correlated by user and session. And hard 15-minute idle timeout with
+MFA required for all clinical roles. Shared credentials are structurally impossible
+-- each user has a unique account.
+
+[11:38] CARLOS DIAZ: Good. One more thing -- data residency. All PHI must stay on
+US soil. No data can transit outside the US even in a CDN cache.
+
+[11:39] AMIR HOSSEINI: Confirmed. AWS deployment will be us-west-2 (primary) and
+us-east-1 (DR). CloudFront will be configured with geo-restriction to US only.
+No PHI will be cached at edge -- only static assets.
+
+---------------------------------------------------------------
+ACTION ITEMS
+---------------------------------------------------------------
+
+AI-01  Carlos Diaz      Obtain Athena API v2 sandbox credentials         By June 27, 2026
+AI-02  Sarah Chen       Circulate draft BRD v2.0 for stakeholder review  By May 20, 2026
+AI-03  Amir Hosseini    Confirm Twilio HIPAA BAA process timeline         By May 17, 2026
+AI-04  Priya Sharma     Share telehealth UX wireframes (low-fi)           By May 21, 2026
+AI-05  Lisa Tanaka      Provide sample scheduling data (3 months)         By May 22, 2026
+AI-06  Marcus Webb      Share billing timestamp requirements doc           By May 19, 2026
+AI-07  Priya Sharma     Schedule Workshop 4 -- Data Migration             Week of May 26, 2026
+
+---------------------------------------------------------------
+NEXT MEETING: Workshop 4 -- Data Migration & Integration
+Date: May 27, 2026, 10:00 AM PST
+---------------------------------------------------------------
+
+[END OF TRANSCRIPT]
+Transcribed by: Diego Ruiz, Business Analyst, Stackular Technologies
+Reviewed by: Sarah Chen, MediConnect VP Engineering

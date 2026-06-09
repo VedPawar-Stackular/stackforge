@@ -1,0 +1,77 @@
+STATEMENT OF WORK
+Client: TechCorp Inc.
+Project: Customer Portal Redesign
+Version: 1.2 | Date: 2026-05-15
+
+1. PROJECT OVERVIEW
+TechCorp Inc. requires a redesign of its existing customer portal to improve
+usability, modernise the technology stack, and support a growing user base. The
+current portal is a legacy PHP application last updated in 2019 and struggles
+with performance issues under peak load. The new portal must be scalable,
+secure, and maintainable by the internal engineering team.
+
+2. SCOPE OF WORK
+The vendor shall deliver a fully functional web-based customer portal covering
+the following capabilities:
+
+2.1 User Authentication and Account Management
+Users must be able to register, log in, reset passwords, and manage their
+profile information. Multi-factor authentication (MFA) is required for
+enterprise accounts. Single sign-on (SSO) via the client's existing Azure AD
+tenant must be supported.
+
+2.2 Dashboard and Reporting
+Each user should see a personalised dashboard upon login. The dashboard must
+display recent activity, open support tickets, invoice summaries, and key
+account metrics. Managers should be able to export reports in PDF and CSV
+formats.
+
+2.3 Support Ticket Management
+Users must be able to raise, view, and comment on support tickets. Tickets must
+support file attachments (max 25 MB per file). The system must send email
+notifications on ticket status changes. SLA tracking should be visible to
+end-users.
+
+2.4 Billing and Invoice Management
+The portal must integrate with the client's existing Stripe account for payment
+processing. Users should be able to view invoice history, download PDFs, and
+update payment methods. Automatic payment retries on failed charges must be
+configurable by administrators.
+
+2.5 Notifications and Alerts
+A configurable notification centre should allow users to opt in or out of
+specific alert categories. Notifications must be delivered via email and
+in-portal bell icon. Future support for SMS and Slack integrations is
+desirable but out of scope for this engagement.
+
+3. NON-FUNCTIONAL REQUIREMENTS
+- The portal must support up to 5,000 concurrent users without degradation.
+- Page load time for the dashboard must not exceed 2 seconds on a standard
+  broadband connection.
+- The system must achieve 99.9% uptime SLA.
+- All data at rest and in transit must be encrypted using AES-256 and TLS 1.3
+  respectively.
+- The application must comply with GDPR and CCPA data privacy regulations.
+- The codebase must include unit and integration test coverage of at least 80%.
+
+4. ASSUMPTIONS
+- TechCorp will provide sandbox access to their Azure AD tenant within two
+  weeks of project kick-off.
+- The client's Stripe account is already configured; vendor is not responsible
+  for Stripe onboarding.
+- Content migration from the legacy portal is out of scope unless separately
+  agreed in writing.
+- The client's infrastructure team will provision the cloud hosting environment.
+
+5. TIMELINE
+- Phase 1 (Authentication + Dashboard): 6 weeks
+- Phase 2 (Support Tickets + Billing): 8 weeks
+- Phase 3 (QA, UAT, Go-Live): 4 weeks
+- Total estimated duration: 18 weeks
+
+6. DELIVERABLES
+- Source code repository (private GitHub)
+- Deployment runbook
+- API documentation (OpenAPI spec)
+- Test coverage report
+- Post-launch support for 30 days

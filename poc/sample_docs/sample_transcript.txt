@@ -1,0 +1,92 @@
+MEETING TRANSCRIPT
+Project: Customer Portal Redesign — Kick-off Call
+Attendees: Sarah (TechCorp PM), James (TechCorp CTO), Priya (Vendor Lead),
+           Marcus (Vendor Architect)
+Date: 2026-05-22
+
+Sarah: Thanks everyone for joining. I want to make sure we're aligned on
+priorities before the team starts. The biggest pain point for our users right
+now is the login experience — it takes forever and MFA is confusing.
+
+Priya: Understood. We've planned authentication as Phase 1. One question — the
+SOW mentions Azure AD SSO. Do all users need SSO or just enterprise accounts?
+
+James: Good question. Only our enterprise tier customers need SSO. Standard and
+free tier users will use email and password with optional MFA.
+
+Marcus: Got it. We'll gate the SSO flow behind the account plan type. That
+affects the registration flow too — should free users ever be able to upgrade
+to enterprise within the portal itself?
+
+Sarah: Yes, that's actually really important. We lose people because they have
+to email sales to upgrade. We want a self-serve upgrade path in Phase 2.
+
+Priya: That wasn't in the original SOW. We'd need to scope that as an
+additional requirement — it touches billing, permissions, and the SSO
+provisioning flow.
+
+James: Fair, but it's a must-have for us before go-live. Can we fold it into
+Phase 2?
+
+Priya: We can try but no promises on timeline — Marcus, thoughts?
+
+Marcus: It's doable but we need to pin down the Stripe integration details
+first. Is the client on Stripe Billing or just Stripe Payments?
+
+James: We use Stripe Billing with annual and monthly plans. Customers have
+proration enabled.
+
+Marcus: Good, that simplifies things. One concern — the SOW says 5,000
+concurrent users. Is that based on actual load data or an estimate?
+
+Sarah: Honest answer — it's a guess. We peak at about 800 concurrent right now
+but we're projecting 3x growth next year.
+
+Marcus: OK so realistic peak is probably 2,500–3,000. We'll design for 5,000
+as headroom but I want to flag that the infrastructure spec needs to match
+that. Who's provisioning the cloud environment?
+
+James: Our ops team will handle AWS provisioning. I'll connect you with Raj,
+our DevOps lead.
+
+Priya: Perfect. One more item — the SOW mentions GDPR and CCPA compliance. Do
+you have a DPA template, or should we use ours?
+
+Sarah: Legal is handling that. They'll send something over this week. Also —
+we need a cookie consent banner on the login page before go-live.
+
+Priya: Noted. That's a small addition but we'll capture it. Any questions on
+the dashboard scope?
+
+Sarah: The report export — can we add Excel as a format? PDF and CSV are in
+the SOW but our finance team lives in Excel.
+
+Priya: We can add XLSX export. It's straightforward with the libraries we're
+using. Consider it included.
+
+Marcus: I want to flag one risk: the 2-second page load requirement for the
+dashboard. If the dashboard is pulling live data from multiple sources, we'll
+need caching. Can we agree upfront that some metrics can be up to 15 minutes
+stale?
+
+Sarah: 15 minutes is fine for aggregate metrics. Real-time status on open
+tickets is important though.
+
+Marcus: Understood — ticket status will be live, aggregate metrics will be
+cached. We'll document that clearly in the API spec.
+
+James: Last thing from me — the 30-day post-launch support. Does that include
+bug fixes for issues we discover in production?
+
+Priya: Yes, critical and high severity bugs are covered. We define critical as
+data loss or security issues, high as features broken for more than 10% of
+users. Medium and low severity go into a separate maintenance retainer if
+you want it.
+
+James: We'll need to talk about that retainer. Can you send a proposal?
+
+Priya: Will do. OK, I think that covers the main items. We'll send meeting
+notes with the additional requirements captured: self-serve plan upgrade, XLSX
+export, cookie consent banner, and the caching agreement on dashboard metrics.
+
+Sarah: Perfect. Talk next week.

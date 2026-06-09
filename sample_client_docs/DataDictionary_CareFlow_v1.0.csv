@@ -1,0 +1,51 @@
+Table,Column,Type,Nullable,Description,PII/PHI,Retention
+patient,id,UUID,N,Primary key,N,7 years
+patient,mrn,VARCHAR(20),N,Medical Record Number (auto-generated),Y,7 years
+patient,first_name,VARCHAR(100),N,Patient legal first name,Y,7 years
+patient,last_name,VARCHAR(100),N,Patient legal last name,Y,7 years
+patient,date_of_birth,DATE,N,Patient date of birth,Y,7 years
+patient,email,VARCHAR(255),Y,Contact email (encrypted at rest),Y,7 years
+patient,phone_mobile,VARCHAR(20),Y,Mobile phone (encrypted at rest),Y,7 years
+patient,preferred_language,VARCHAR(10),N,ISO 639-1 language code (default: en),N,7 years
+patient,portal_account_id,UUID,Y,FK to portal_account.id (null if unregistered),N,7 years
+patient,created_at,TIMESTAMPTZ,N,Record creation timestamp (UTC),N,7 years
+patient,updated_at,TIMESTAMPTZ,N,Last update timestamp (UTC),N,7 years
+provider,id,UUID,N,Primary key,N,7 years
+provider,npi,VARCHAR(10),N,National Provider Identifier (unique),Y,7 years
+provider,first_name,VARCHAR(100),N,Provider legal first name,Y,7 years
+provider,last_name,VARCHAR(100),N,Provider legal last name,Y,7 years
+provider,specialty,VARCHAR(100),N,Clinical specialty,N,7 years
+provider,clinic_id,UUID,N,FK to clinic.id,N,7 years
+provider,active,BOOLEAN,N,Whether provider is currently active,N,7 years
+appointment,id,UUID,N,Primary key,N,7 years
+appointment,patient_id,UUID,N,FK to patient.id,N,7 years
+appointment,provider_id,UUID,N,FK to provider.id,N,7 years
+appointment,clinic_id,UUID,N,FK to clinic.id,N,7 years
+appointment,service_type,VARCHAR(50),N,NEW_PATIENT | FOLLOW_UP | TELEHEALTH,N,7 years
+appointment,status,VARCHAR(20),N,PENDING | CONFIRMED | ARRIVED | COMPLETED | NO_SHOW | CANCELLED,N,7 years
+appointment,slot_start,TIMESTAMPTZ,N,Appointment start (UTC),N,7 years
+appointment,slot_end,TIMESTAMPTZ,N,Appointment end (UTC),N,7 years
+appointment,channel,VARCHAR(20),N,IN_PERSON | TELEHEALTH,N,7 years
+appointment,reminder_48h_sent_at,TIMESTAMPTZ,Y,Timestamp T-48h reminder dispatched,N,7 years
+appointment,reminder_2h_sent_at,TIMESTAMPTZ,Y,Timestamp T-2h reminder dispatched,N,7 years
+appointment,cancelled_at,TIMESTAMPTZ,Y,Cancellation timestamp,N,7 years
+appointment,cancelled_by,VARCHAR(20),Y,PATIENT | PROVIDER | ADMIN,N,7 years
+telehealth_session,id,UUID,N,Primary key,N,7 years
+telehealth_session,appointment_id,UUID,N,FK to appointment.id,N,7 years
+telehealth_session,twilio_room_sid,VARCHAR(100),N,Twilio Room SID,N,7 years
+telehealth_session,provider_joined_at,TIMESTAMPTZ,Y,Provider join timestamp,N,7 years
+telehealth_session,patient_joined_at,TIMESTAMPTZ,Y,Patient join timestamp,N,7 years
+telehealth_session,ended_at,TIMESTAMPTZ,Y,Session end timestamp,N,7 years
+telehealth_session,duration_secs,INTEGER,Y,Billable session duration in seconds,N,7 years
+telehealth_session,recording_consent,BOOLEAN,N,True if patient consented to recording,N,7 years
+telehealth_session,recording_s3_key,VARCHAR(500),Y,S3 object key (null if not recorded),N,7 years
+audit_event,id,UUID,N,Primary key,N,7 years
+audit_event,user_id,UUID,N,FK to portal_account.id,N,7 years
+audit_event,user_role,VARCHAR(30),N,Role at time of action,N,7 years
+audit_event,action,VARCHAR(50),N,READ | CREATE | UPDATE | DELETE | LOGIN | LOGOUT | EXPORT,N,7 years
+audit_event,resource_type,VARCHAR(50),N,patient | appointment | message | recording,N,7 years
+audit_event,resource_id,UUID,Y,ID of affected resource,N,7 years
+audit_event,ip_address,VARCHAR(45),N,IPv4/IPv6 of request origin,N,7 years
+audit_event,session_id,UUID,N,FK to active_session.id,N,7 years
+audit_event,occurred_at,TIMESTAMPTZ,N,"Event timestamp (UTC, immutable)",N,7 years
+audit_event,metadata,JSONB,Y,"Additional context (search query, export filters)",N,7 years

@@ -1,0 +1,197 @@
+{
+  "project": "CareFlow",
+  "client": "MediConnect Health Systems",
+  "version": "1.0",
+  "generated": "2026-06-05",
+  "source_documents": [
+    "BRD-MC-2026-002",
+    "FRS-MC-2026-003",
+    "SOW-MC-2026-001"
+  ],
+  "epics": [
+    {
+      "id": "E-01",
+      "title": "Patient Self-Service Portal",
+      "description": "Enable patients to manage their healthcare journey digitally without front-desk assistance.",
+      "user_stories": [
+        {
+          "id": "US-001",
+          "title": "Patient Registration",
+          "as_a": "new patient",
+          "i_want": "to register for a portal account using my email or Google login",
+          "so_that": "I can access my health information online",
+          "acceptance_criteria": [
+            "AC-001-1: Registration form collects: first name, last name, date of birth, email, mobile",
+            "AC-001-2: Google SSO and Apple ID SSO both functional",
+            "AC-001-3: Verification email sent within 60 seconds",
+            "AC-001-4: Password breach-checked against HaveIBeenPwned before account creation"
+          ],
+          "story_points": 5,
+          "priority": "Must"
+        },
+        {
+          "id": "US-002",
+          "title": "Appointment Booking",
+          "as_a": "registered patient",
+          "i_want": "to book an appointment online in under 3 taps",
+          "so_that": "I do not need to call the clinic",
+          "acceptance_criteria": [
+            "AC-002-1: Patient can filter providers by specialty, clinic, and date",
+            "AC-002-2: Available slots shown in patient's local timezone",
+            "AC-002-3: Confirmation SMS and email sent within 2 minutes of booking",
+            "AC-002-4: Booking blocked if patient has 2+ uncancelled future appointments with same provider"
+          ],
+          "story_points": 8,
+          "priority": "Must"
+        },
+        {
+          "id": "US-003",
+          "title": "Appointment Reminders",
+          "as_a": "patient with an upcoming appointment",
+          "i_want": "to receive automated reminders",
+          "so_that": "I do not forget my appointment",
+          "acceptance_criteria": [
+            "AC-003-1: SMS reminder sent at exactly T-48h (+/- 5 minutes)",
+            "AC-003-2: Email reminder sent at exactly T-48h (+/- 5 minutes)",
+            "AC-003-3: SMS reminder sent at T-2h (+/- 5 minutes)",
+            "AC-003-4: Each reminder contains: provider name, date, time, location/join link, one-tap cancel link",
+            "AC-003-5: Patient can opt down to 1 reminder or opt out in profile settings"
+          ],
+          "story_points": 5,
+          "priority": "Must"
+        },
+        {
+          "id": "US-004",
+          "title": "Secure Messaging",
+          "as_a": "patient",
+          "i_want": "to message my care team securely",
+          "so_that": "I can communicate without calling the clinic",
+          "acceptance_criteria": [
+            "AC-004-1: Messages encrypted at rest and in transit",
+            "AC-004-2: Push notifications do not expose PHI in notification text",
+            "AC-004-3: Attachments: JPEG, PNG, PDF, DICOM only; max 25MB",
+            "AC-004-4: Message delivery confirmation shown to sender",
+            "AC-004-5: Messages retained 7 years; patient cannot delete messages"
+          ],
+          "story_points": 8,
+          "priority": "Must"
+        }
+      ]
+    },
+    {
+      "id": "E-02",
+      "title": "Provider Workflow Dashboard",
+      "description": "Give providers a single interface for scheduling, patient records, and telehealth.",
+      "user_stories": [
+        {
+          "id": "US-005",
+          "title": "Daily Schedule View",
+          "as_a": "provider",
+          "i_want": "to see my full day schedule with patient details on one screen",
+          "so_that": "I can prepare for each appointment without switching systems",
+          "acceptance_criteria": [
+            "AC-005-1: Schedule loads within 2 seconds",
+            "AC-005-2: Each slot shows: patient name, MRN, service type, status, alerts",
+            "AC-005-3: Provider can filter by date and service type",
+            "AC-005-4: Status can be updated inline with single click"
+          ],
+          "story_points": 5,
+          "priority": "Must"
+        },
+        {
+          "id": "US-006",
+          "title": "Telehealth Session Launch",
+          "as_a": "provider",
+          "i_want": "to launch a telehealth session directly from the appointment entry",
+          "so_that": "I do not need to switch to a separate application",
+          "acceptance_criteria": [
+            "AC-006-1: 'Start Session' button visible on telehealth appointments from T-10min",
+            "AC-006-2: Clicking 'Start Session' creates Twilio room and opens video in same tab",
+            "AC-006-3: Patient intake form and prior notes accessible in split view during call",
+            "AC-006-4: Session duration timer visible throughout call",
+            "AC-006-5: Call quality indicator (green/amber/red) visible for both participants"
+          ],
+          "story_points": 13,
+          "priority": "Must"
+        }
+      ]
+    },
+    {
+      "id": "E-03",
+      "title": "Telehealth Platform",
+      "description": "HIPAA-compliant WebRTC video consultations with no patient downloads required.",
+      "user_stories": [
+        {
+          "id": "US-007",
+          "title": "Patient Join Telehealth",
+          "as_a": "patient",
+          "i_want": "to join my telehealth appointment with a single tap from my SMS",
+          "so_that": "I can connect without technical difficulties",
+          "acceptance_criteria": [
+            "AC-007-1: SMS join link delivered 15 minutes before session",
+            "AC-007-2: Clicking link opens web browser; app opens if installed",
+            "AC-007-3: Patient in waiting room within 30 seconds of tapping link",
+            "AC-007-4: Waiting room shows provider name, estimated wait, connection test",
+            "AC-007-5: If wait > 15 minutes, patient receives SMS notification"
+          ],
+          "story_points": 8,
+          "priority": "Must"
+        },
+        {
+          "id": "US-008",
+          "title": "Session Recording with Consent",
+          "as_a": "provider",
+          "i_want": "to optionally record telehealth sessions with patient consent",
+          "so_that": "I can review consultations and share with patients",
+          "acceptance_criteria": [
+            "AC-008-1: Recording button disabled unless patient provides explicit digital consent",
+            "AC-008-2: Consent captured as checkbox with timestamp and IP address logged to audit",
+            "AC-008-3: Recording stored encrypted in S3; access logged",
+            "AC-008-4: Recording deleted after 7 years per retention policy"
+          ],
+          "story_points": 8,
+          "priority": "Should"
+        }
+      ]
+    },
+    {
+      "id": "E-04",
+      "title": "Compliance & Administration",
+      "description": "Tools and controls to maintain HIPAA compliance and manage the platform.",
+      "user_stories": [
+        {
+          "id": "US-009",
+          "title": "Audit Log Access",
+          "as_a": "compliance officer",
+          "i_want": "to query all PHI access events",
+          "so_that": "I can demonstrate HIPAA compliance and investigate incidents",
+          "acceptance_criteria": [
+            "AC-009-1: Query filters: date range, user, patient MRN, action type, resource type",
+            "AC-009-2: Results returned in < 5 seconds for queries <= 90 days",
+            "AC-009-3: Exportable as CSV",
+            "AC-009-4: Audit records cannot be modified or deleted by any user",
+            "AC-009-5: Monthly compliance summary report auto-generated"
+          ],
+          "story_points": 8,
+          "priority": "Must"
+        },
+        {
+          "id": "US-010",
+          "title": "MFA Enforcement",
+          "as_a": "system",
+          "i_want": "to enforce MFA for all clinical and admin accounts",
+          "so_that": "unauthorized access to PHI is prevented",
+          "acceptance_criteria": [
+            "AC-010-1: TOTP MFA required on every login for Provider, Admin, Compliance, Billing roles",
+            "AC-010-2: Patients offered optional TOTP or SMS MFA",
+            "AC-010-3: No MFA bypass mechanism exists in production",
+            "AC-010-4: MFA setup mandatory at first login for clinical roles",
+            "AC-010-5: Lost MFA device recovery requires identity verification via IT admin"
+          ],
+          "story_points": 5,
+          "priority": "Must"
+        }
+      ]
+    }
+  ]
+}
