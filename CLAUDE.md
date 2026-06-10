@@ -64,7 +64,7 @@ These are non-negotiable across the entire codebase. Every AI call must comply.
 - **Map-reduce pattern:** Chunk document → cheap model summarises each chunk in parallel (batch) → summaries combined → capable model generates structured requirements from summaries only.
 - Chunk size: 250–300 words at natural boundaries (paragraphs, section headers).
 - Cache processed document extractions immediately after first use. Never re-process an unchanged document.
-- **Chunk overlap:** Add ~35-word tail overlap between adjacent chunks (sliding window) so requirements that span a chunk boundary appear in full in at least one chunk's summary. Not yet implemented in POC — flag for production.
+- **Chunk overlap:** 35-word tail overlap between adjacent chunks (sliding window). Implemented — `CHUNK_OVERLAP_WORDS = 35` in `config.py`, applied in `chunker.py`.
 
 **POC status: built and validated.** See `poc/` directory. Ran against real CareFlow client documents (SOW, FRS, meeting transcript) — extracted 130 requirements across 4 types and generated 18 clarification questions. End-to-end pipeline takes ~2 minutes per project.
 
@@ -73,6 +73,48 @@ These are non-negotiable across the entire codebase. Every AI call must comply.
 - **Hierarchical generation:** cheap model decomposes requirements into epic themes first, then mid-tier model generates per-epic user stories.
 - Use few-shot prompting with the company's own past user stories as examples. Format is demonstrated, not described in instructions — this shortens prompts and improves consistency.
 - Every generation call returns strict JSON. Schema: `{ id, title, description, acceptanceCriteria: [], storyPoints, assignee }`.
+- **Cross-cutting constraints injection (zero extra LLM cost):** Requirements from budget/testing/integrations/team_and_process topics plus `req_type=constraint` are extracted by rule-based filter and appended to every epic's story prompt. Ensures ACs reflect project-wide constraints without a separate LLM call. Adds ~600 tokens per epic call.
+- **ADO push:** Epics and user stories push to Azure DevOps REST API v7.1 (Agile template — `$Epic`, `$User Story`). Per-project area path auto-created on first push if it doesn't exist.
+
+**POC status: built and validated.** See `poc/pipeline/stage2_runner.py`. Metrics calculator shows ~87% cost savings vs naive approach at Anthropic rates.
+
+### Stage 1.5 — SDLC Document Generation (post-ingestion, pre-Stage 2)
+
+After Stage 1 extracts requirements, the pipeline writes structured Markdown files to `poc/output/{project_id}/` — one file per SDLC topic. No LLM calls — pure formatting of structured requirement data.
+
+Topics: `requirements`, `design`, `technical`, `timeline`, `budget`, `testing`, `integrations`, `team_and_process`.
+
+Files: `doc_writer.py` (initial write), `doc_editor.py` (incremental edits to existing docs).
+
+These files feed into the Google Stitch integration (design screen generation) and are injected into Multica agent workspaces via `workspace_prep.py`.
+
+---
+
+### Google Stitch Integration (UI Design Generation)
+
+Standalone module that generates high-fidelity UI screens via the Google Stitch MCP server. Called after SDLC docs are written for a project.
+
+**Flow:**
+1. Reads `poc/output/{project_id}/design.md` (falls back to `requirements.md`, then static screens).
+2. Cheap model extracts screen descriptions + generates `DESIGN.md` (design tokens, rationale).
+3. MCP tool `create_project()` creates a Stitch project.
+4. MCP tool `generate_screen()` called per screen.
+5. HTML downloaded via `get_screen_code()` → saved to `poc/output/{project_id}/stitch/screens/`.
+6. `metadata.json` written: stitch project id, URL, screen list, timestamp.
+
+**Output structure:**
+```
+poc/output/{project_id}/stitch/
+    DESIGN.md       — design tokens + rationale (Claude Code reads natively)
+    metadata.json   — stitch project id, url, screen list, timestamp
+    screens/        — one HTML file per generated screen
+```
+
+**Requirements:** `STITCH_API_KEY` in `poc/.env`, Node.js, `npx stitch-mcp-server`.
+
+**`workspace_prep.py`** — called by the Multica Go daemon as a subprocess after workspace creation and before the CLI agent spawns. Copies Stitch design assets into the agent workspace so the agent sees the designs natively.
+
+---
 
 ### Stage 3 — Sprint & Task Planning
 
@@ -234,13 +276,16 @@ These are confirmed architectural problems that need to be fixed. Do not impleme
 - Atomic task claiming in the daemon. Already implemented.
 - `task_usage` table in PostgreSQL for token tracking. Already implemented; needs to capture all dimensions listed above.
 
-### Stage 1 POC-specific decisions
+### POC-specific decisions (all stages)
 
 - **LLM provider: Groq (free tier)** — `llama-3.1-8b-instant` maps to haiku tier; `llama-3.3-70b-versatile` maps to sonnet tier. Uses `openai` SDK with `base_url="https://api.groq.com/openai/v1"`. Switching to Anthropic API = change base URL + model name strings only, no architecture changes.
 - **Database adapter: `pg8000`** — Pure Python PostgreSQL adapter. `psycopg2-binary` has no Python 3.14 wheels and cannot be built without pg_config on Windows. Do not switch back.
-- **Vector search: disabled** — `sentence-transformers` requires `torch`/`torchvision` which have no Python 3.14 wheels. Schema has `embedding vector(384)` column ready (currently NULL). BM25 keyword search (`rank_bm25`) is used instead. Re-enable when Python 3.14 torch wheels are available — see `poc/pipeline/embedder.py` and `poc/rag/search.py`.
-- **Async concurrency: `asyncio.Semaphore(5)`** — Groq free tier caps at 30 req/min. Semaphore in `poc/pipeline/summarizer.py` limits concurrent LLM calls to 5. Includes exponential backoff retry on 429 errors.
+- **Local vector search: disabled** — `sentence-transformers` requires `torch`/`torchvision` which have no Python 3.14 wheels. BM25 keyword search (`rank_bm25`) is used as baseline. Re-enable local embeddings when Python 3.14 torch wheels are available.
+- **Pinecone (optional):** Set `PINECONE_API_KEY` in `poc/.env` to enable semantic search alongside BM25. Uses `multilingual-e5-large` (1024-dim) via Pinecone Inference — no local model download required. Falls back to BM25-only if key is absent. See `poc/rag/pinecone_client.py`.
+- **Async concurrency: `asyncio.Semaphore(5)`** — Groq free tier caps at 30 req/min. Semaphore limits concurrent LLM calls to 5. Includes exponential backoff retry on 429 errors. `asyncio.Semaphore` is created inside async functions (not module-level) to avoid event loop ownership issues when called via `asyncio.run()` in FastAPI background threads.
 - **UUID array inserts:** `pg8000` cannot auto-cast Python lists to PostgreSQL `UUID[]` columns. Use string literal format `"{uuid}"` with `%s::uuid[]` cast in all SQL that writes to `source_document_ids`. This pattern is in `poc/pipeline/runner.py` and `poc/run_demo.py`.
+- **TEXT[] acceptance criteria:** `pg8000` can't auto-cast Python lists to `TEXT[]`. Use `_text_array_literal()` helper in `stage2_runner.py` for all AC inserts.
+- **ADO push is sync:** `httpx.Client` used in `ado_client.py`, called directly from sync FastAPI route. Do not convert to async without confirming the route stays sync.
 
 ---
 
@@ -255,29 +300,41 @@ These are confirmed architectural problems that need to be fixed. Do not impleme
 
 ---
 
-## Stage 1 POC — File Map
+## POC — File Map (Stages 1 & 2)
 
 ```
 poc/
 ├── requirements.txt          # All deps unpinned (>=) for Python 3.14 compat
-├── .env                      # GROQ_API_KEY, DATABASE_URL (not committed)
-├── config.py                 # Shared config — model names, chunk size, BM25/rerank top-k
+├── .env                      # GROQ_API_KEY, DATABASE_URL, ADO_*, STITCH_API_KEY, PINECONE_* (not committed)
+├── config.py                 # Shared config — model names, chunk size, BM25/rerank top-k, ADO, Pinecone, Stitch, pricing
 ├── db.py                     # pg8000 DB context manager (cursor must be closed manually — no `with cursor()`)
 ├── run_demo.py               # CLI runner: full pipeline + rich terminal output
 ├── db/
 │   ├── init.sql              # Schema: clients, projects, documents, doc_chunks, requirements, clarifications, rag_chunks
-│   └── seed.py               # Creates demo client/project; writes sample docs to sample_docs/
+│   ├── stage2.sql            # Stage 2 schema: epics, user_stories, stage2_metrics + stage2_status on projects
+│   ├── seed.py               # Creates demo client/project; writes sample docs to sample_docs/
+│   └── migrate_stage2.py     # One-time migration to apply stage2.sql
 ├── pipeline/
 │   ├── parser.py             # PDF (pdfplumber) / DOCX (python-docx) / TXT → plain text
-│   ├── chunker.py            # ~275-word chunks at paragraph boundaries (no overlap yet — known gap)
+│   ├── chunker.py            # ~275-word chunks at paragraph boundaries; 35-word overlap between chunks
 │   ├── summarizer.py         # Cheap model parallel summarisation with semaphore + retry
 │   ├── extractor.py          # Capable model: summaries → structured requirements JSON
-│   ├── embedder.py           # Stores text in rag_chunks; embedding column left NULL (vector search disabled)
+│   ├── embedder.py           # Stores text in rag_chunks; embedding column left NULL (local vector search disabled)
 │   ├── clarifier.py          # Cheap model: requirements → clarification questions JSON
-│   └── runner.py             # Orchestrates all steps; called by FastAPI background task
+│   ├── runner.py             # Stage 1 orchestration; called by FastAPI background task
+│   ├── doc_writer.py         # Writes SDLC topic .md files to poc/output/{project_id}/ (no LLM)
+│   ├── doc_editor.py         # Incremental edits to existing SDLC topic files
+│   ├── epic_generator.py     # Stage 2 step 1: cheap model, requirement titles only → epic themes JSON
+│   ├── story_generator.py    # Stage 2 step 2: mid model, per-epic scoped context, parallel via asyncio.gather
+│   ├── stage2_runner.py      # Stage 2 orchestration: epic gen → story gen → DB insert → optional ADO push
+│   ├── ado_client.py         # ADO REST API v7.1: create Epic/User Story, auto-create area path
+│   ├── metrics_calculator.py # Actual vs naive cost comparison at Anthropic pricing rates
+│   ├── stitch_designer.py    # Google Stitch MCP: extract screens → create project → generate HTML screens
+│   └── workspace_prep.py     # Multica workspace prep: inject Stitch design assets before agent spawns
 ├── rag/
-│   ├── search.py             # BM25-only search over rag_chunks (semantic search disabled)
-│   └── reranker.py           # Passthrough: returns top RERANK_TOP_K BM25 hits
+│   ├── search.py             # BM25 + optional Pinecone semantic search over rag_chunks
+│   ├── reranker.py           # Returns top RERANK_TOP_K hits (cross-encoder when available)
+│   └── pinecone_client.py    # Pinecone index creation + upsert + query (enabled via PINECONE_API_KEY)
 ├── api/
 │   ├── main.py               # FastAPI app with CORS; mounts all routers
 │   ├── models.py             # Pydantic request/response schemas
@@ -285,9 +342,30 @@ poc/
 │       ├── projects.py       # CRUD: clients + projects
 │       ├── documents.py      # File upload → pipeline via BackgroundTasks
 │       ├── requirements.py   # List requirements by project
-│       └── clarifications.py # List Qs, submit answers
+│       ├── clarifications.py # List Qs, submit answers
+│       ├── docs.py           # SDLC document read/edit endpoints
+│       ├── epics.py          # Stage 2: generate, status, list epics/stories, push to ADO, metrics
+│       └── stitch.py         # Stitch: trigger design gen, get status, list screens
+├── scripts/
+│   ├── ado_bulk_delete.py    # Bulk delete ADO work items (dev/demo cleanup utility)
+│   └── debug_stitch.py       # Debug helper for Stitch MCP connection
+├── output/
+│   └── {project_id}/         # Per-project SDLC docs + Stitch assets (gitignored)
+│       ├── requirements.md
+│       ├── design.md
+│       ├── technical.md
+│       ├── timeline.md
+│       ├── budget.md
+│       ├── testing.md
+│       ├── integrations.md
+│       ├── team_and_process.md
+│       └── stitch/
+│           ├── DESIGN.md
+│           ├── metadata.json
+│           └── screens/      # HTML per screen from Stitch MCP
 └── ui/
-    └── app.py                # Streamlit 4-tab UI (Setup / Upload / Requirements / Clarifications & Query)
+    └── app.py                # Streamlit 7-tab UI (Setup / Upload / Requirements / Clarifications & Query /
+                              #                     Documents / Epics & Stories / Stitch Designs)
 ```
 
 **How to run:**
@@ -295,7 +373,7 @@ poc/
 # 1. Start database
 docker start stackforge-db
 
-# 2. From poc/ directory — terminal demo
+# 2. From poc/ directory — terminal demo (Stage 1 only)
 python run_demo.py
 
 # 3. API server
@@ -306,5 +384,11 @@ python -m streamlit run ui/app.py
 ```
 
 **Sample client documents** are in `sample_client_docs/` at the repo root (CareFlow HIPAA telehealth platform). Use these for demos.
+
+---
+
+## Codebase Architecture Docs
+
+`docs/codebase/` contains generated architecture snapshots: `ARCHITECTURE.md`, `STRUCTURE.md`, `STACK.md`, `CONVENTIONS.md`, `INTEGRATIONS.md`, `TESTING.md`, `CONCERNS.md`. These are reference only — treat the code and this CLAUDE.md as authoritative.
 
 ---

@@ -42,17 +42,21 @@ _client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
 # ─── Screen extraction ───────────────────────────────────────────────────────
 
 _EXTRACT_SYSTEM = (
-    "You are a UI/UX analyst. Given a set of design requirements, identify the distinct "
+    "You are a UI/UX analyst. Given project requirements (which may include functional, "
+    "design, technical, integration, and assumption requirements), identify the distinct "
     "application screens or views that need to be built.\n\n"
+    "Infer screens from ANY type of requirement — a functional requirement about booking "
+    "appointments implies a booking screen; an integration requirement for payment implies "
+    "a payment screen; a design assumption about mobile-first implies mobile screens.\n\n"
     "For each screen:\n"
     "- Give it a short snake_case name (e.g. 'patient_join', 'provider_dashboard')\n"
     "- Give it a human-readable label (e.g. 'Patient Join Screen')\n"
     "- Set device to 'mobile' or 'desktop' based on who uses it\n"
-    "- Write a 2-3 sentence Stitch prompt describing the screen's purpose, key UI elements, "
-    "and visual style\n\n"
+    "- Write a 2-4 sentence Stitch prompt describing the screen's purpose, key UI elements, "
+    "specific features from the requirements, and visual style\n\n"
     "Return ONLY valid JSON matching this schema:\n"
     '{"screens": [{"name": "string", "label": "string", "device": "mobile|desktop", "prompt": "string"}]}\n\n'
-    "Extract 3-6 screens maximum. Focus on the most important user-facing screens."
+    "Extract 5-8 screens. Cover the main user journeys, not just isolated features."
 )
 
 _DESIGN_MD_SYSTEM = (
@@ -114,7 +118,7 @@ async def _generate_design_md(project_name: str, screens: list[dict], design_md_
     user_msg = (
         f"Project: {project_name}\n\n"
         f"Screens:\n{screen_list}\n\n"
-        f"Design requirements:\n{design_md_content[:2000]}"
+        f"Requirements context:\n{design_md_content[:5000]}"
     )
     try:
         response = await _client.chat.completions.create(
@@ -385,46 +389,49 @@ def _fetch_all_requirements_text(project_id: str) -> str:
 
 async def generate_for_project(project_id: str) -> str:
     """
-    Reads design.md, extracts screens, generates the Stitch project.
+    Builds a rich combined context from design.md + all DB requirements, extracts
+    screens, then generates the Stitch project.
 
-    Falls back gracefully when design.md is missing or has no requirements:
-      1. Try design.md content
-      2. Try all extracted requirements across all topics
-      3. Static 3-screen fallback keyed to project name
+    Always combines both sources — design.md and all extracted requirements
+    (functional, technical, integration, etc.) — rather than using them as
+    sequential fallbacks. This gives the LLM full project context for screen
+    inference even when design-specific requirements are sparse.
+
+    Falls back to static 3-screen scaffold only if the project has no requirements
+    at all (e.g. Stage 1 never ran).
+
     Returns the absolute path of poc/output/{project_id}/stitch/.
     """
     project_name = _get_project_name(project_id)
 
-    # Step 1: try design.md
+    # Always load design.md (may be empty/missing — that's fine)
     design_md_path = get_doc_path(project_id, "design")
     try:
         with open(design_md_path, encoding="utf-8") as f:
-            design_content = f.read()
+            design_content = f.read().strip()
     except OSError:
         design_content = ""
 
-    screens = await extract_screens(design_content) if design_content.strip() else []
+    # Always fetch all DB requirements across every SDLC topic
+    all_reqs_text = _fetch_all_requirements_text(project_id)
 
-    # Step 2: no screens from design.md — use all requirements as broader context
+    # Build unified context: design.md first (explicit design intent), then all
+    # other requirements (functional/technical/integration imply screens too)
+    context_parts = [f"Project: {project_name}"]
+    if design_content:
+        context_parts.append(f"## Design Requirements\n\n{design_content}")
+    if all_reqs_text:
+        context_parts.append(all_reqs_text)
+    combined_context = "\n\n".join(context_parts)
+
+    screens: list[dict] = []
+
+    if combined_context.strip() != f"Project: {project_name}":
+        screens = await extract_screens(combined_context)
+
     if not screens:
         _logger.info(
-            "No screens from design.md for project %s — falling back to all requirements",
-            project_id,
-        )
-        all_reqs_text = _fetch_all_requirements_text(project_id)
-        if all_reqs_text:
-            fallback_context = (
-                f"Project: {project_name}\n\n"
-                f"No explicit design requirements found. "
-                f"Use the requirements below to infer the key screens.\n\n"
-                f"{all_reqs_text}"
-            )
-            screens = await extract_screens(fallback_context)
-
-    # Step 3: still nothing — static screens based on project name
-    if not screens:
-        _logger.info(
-            "No screens inferred from requirements for project %s — using static fallback",
+            "No screens inferred for project %s — using static fallback",
             project_id,
         )
         screens = [
@@ -452,7 +459,8 @@ async def generate_for_project(project_id: str) -> str:
         "Generating Stitch project for %s with %d screens: %s",
         project_id, len(screens), [s["name"] for s in screens],
     )
-    return await generate_stitch_designs(project_id, project_name, screens, design_content)
+    # Pass combined_context to _generate_design_md so DESIGN.md is also rich
+    return await generate_stitch_designs(project_id, project_name, screens, combined_context)
 
 
 def _get_project_name(project_id: str) -> str:
