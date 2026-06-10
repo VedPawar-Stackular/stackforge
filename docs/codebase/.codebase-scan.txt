@@ -1,0 +1,201 @@
+
+=== DIRECTORY TREE (max depth 3, source files only) ===
+.claude
+.claude\.agents
+.claude\.agents\skills
+.claude\.agents\skills\frontend-design
+.claude\settings.local.json
+.claude\skills
+.claude\skills\frontend-design
+.gitignore
+architecture.md
+CLAUDE.md
+docs
+docs\codebase
+docs\codebase\.codebase-scan.txt
+Exiladraw
+Exiladraw\LocalLLM_vs_CheapModel.excalidraw
+Exiladraw\poc_architecture.excalidraw
+Exiladraw\stage1_comparison.excalidraw
+poc
+poc\.env
+poc\.env.example
+poc\.gitignore
+poc\api
+poc\api\__init__.py
+poc\api\main.py
+poc\api\models.py
+poc\api\routes
+poc\api\routes\__init__.py
+poc\api\routes\clarifications.py
+poc\api\routes\docs.py
+poc\api\routes\documents.py
+poc\api\routes\epics.py
+poc\api\routes\projects.py
+poc\api\routes\requirements.py
+poc\api\routes\stitch.py
+poc\config.py
+poc\db
+poc\db\init.sql
+poc\db\migrate_stage2.py
+poc\db\seed.py
+poc\db\stage2.sql
+poc\db.py
+poc\docs
+poc\docs\MULTICA_INTEGRATION.md
+poc\output
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\budget.md
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\design.md
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\integrations.md
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\requirements.md
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\team_and_process.md
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\technical.md
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\testing.md
+poc\output\1da69c30-fef6-414e-a3d5-7d3e801bb272\timeline.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\budget.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\design.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\integrations.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\requirements.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\stitch
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\team_and_process.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\technical.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\testing.md
+poc\output\7c0db403-8739-4ed3-a548-c83b71c16e2f\timeline.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\budget.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\design.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\integrations.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\requirements.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\team_and_process.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\technical.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\testing.md
+poc\output\8e4edb29-6edb-4769-88f3-5c892cc71523\timeline.md
+poc\pipeline
+poc\pipeline\__init__.py
+poc\pipeline\ado_client.py
+poc\pipeline\chunker.py
+poc\pipeline\clarifier.py
+poc\pipeline\doc_editor.py
+poc\pipeline\doc_writer.py
+poc\pipeline\embedder.py
+poc\pipeline\epic_generator.py
+poc\pipeline\extractor.py
+poc\pipeline\metrics_calculator.py
+poc\pipeline\parser.py
+poc\pipeline\runner.py
+poc\pipeline\stage2_runner.py
+poc\pipeline\stitch_designer.py
+poc\pipeline\story_generator.py
+poc\pipeline\summarizer.py
+poc\pipeline\workspace_prep.py
+poc\rag
+poc\rag\__init__.py
+poc\rag\pinecone_client.py
+poc\rag\reranker.py
+poc\rag\search.py
+poc\README.md
+poc\requirements.txt
+poc\run_demo.py
+poc\sample_docs
+poc\sample_docs\sample_sow.txt
+poc\sample_docs\sample_transcript.txt
+poc\scripts
+poc\scripts\debug_stitch.py
+poc\ui
+poc\ui\app.py
+sample_client_docs
+sample_client_docs\BRD_CareFlow_v2.1.docx
+sample_client_docs\ComplianceRequirements_HIPAA_SOC2.pdf
+sample_client_docs\DataDictionary_CareFlow_v1.0.csv
+sample_client_docs\FRS_CareFlow_v1.0.docx
+sample_client_docs\gen_docs.py
+sample_client_docs\MeetingTranscript_Workshop3_May14.txt
+sample_client_docs\ProjectCharter_CareFlow_v1.0.docx
+sample_client_docs\RFP_CareFlow_2026.pdf
+sample_client_docs\SOW_CareFlow_v1.4.docx
+sample_client_docs\SOW_CareFlow_v1.4.pdf
+sample_client_docs\StakeholderInterviewNotes_May2026.txt
+sample_client_docs\StructuredRequirements_CareFlow_v1.0.json
+sample_client_docs\TRD_CareFlow_v1.0.pdf
+skills-lock.json
+
+=== STACK DETECTION (manifest files) ===
+No recognized manifest files found in project root.
+
+=== ENTRY POINTS ===
+No common entry points found. Check 'main' or 'scripts.start' in manifest files above.
+
+=== LINTING AND FORMATTING CONFIG ===
+No linting or formatting config files found in project root.
+
+=== ENVIRONMENT VARIABLE TEMPLATES ===
+No .env.example or .env.template found. Identify required environment variables by searching the code and config for environment variable reads.
+
+=== TODO / FIXME / HACK (production code only, test dirs excluded) ===
+None found.
+
+=== GIT RECENT COMMITS (last 20) ===
+4ace35e feat: Stage 2 epic & user story generation pipeline
+d7a9bb8 chore: reorganise poc/ directory for clarity
+fc0f269 feat: initial commit â€” Stage 1 POC and project architecture
+
+=== HIGH-CHURN FILES (last 90 days, top 20) ===
+   2 poc/api/main.py
+   2 poc/api/models.py
+   2 poc/api/routes/documents.py
+   2 poc/api/routes/projects.py
+   2 poc/config.py
+   2 poc/ui/app.py
+   2 poc/.gitignore
+   2 poc/db/migrate_v2.sql
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/budget.md
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/design.md
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/integrations.md
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/requirements.md
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/team_and_process.md
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/technical.md
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/testing.md
+   2 poc/output/1da69c30-fef6-414e-a3d5-7d3e801bb272/timeline.md
+   2 poc/output/6d9c5dcf-e8b6-4d82-8442-10949759e0dc/budget.md
+   2 poc/output/6d9c5dcf-e8b6-4d82-8442-10949759e0dc/design.md
+   2 poc/output/6d9c5dcf-e8b6-4d82-8442-10949759e0dc/integrations.md
+   2 poc/output/6d9c5dcf-e8b6-4d82-8442-10949759e0dc/requirements.md
+
+=== MONOREPO SIGNALS ===
+No monorepo signals detected.
+
+=== CODE METRICS ===
+Total files scanned: 96
+Total lines of code: 7974
+
+Files by language:
+  Other: 56
+  Python: 40
+
+Top 10 largest files:
+sample_client_docs\gen_docs.py: 85.8KB
+poc\ui\app.py: 85.1KB
+sample_client_docs\SOW_CareFlow_v1.4.docx: 38.2KB
+sample_client_docs\BRD_CareFlow_v2.1.docx: 38.0KB
+sample_client_docs\FRS_CareFlow_v1.0.docx: 37.8KB
+sample_client_docs\ProjectCharter_CareFlow_v1.0.docx: 36.6KB
+Exiladraw\LocalLLM_vs_CheapModel.excalidraw: 34.9KB
+Exiladraw\poc_architecture.excalidraw: 31.9KB
+Exiladraw\stage1_comparison.excalidraw: 23.5KB
+CLAUDE.md: 20.0KB
+
+=== CI/CD PIPELINES ===
+No CI/CD pipelines detected.
+
+=== CONTAINERS & ORCHESTRATION ===
+No containerization configs detected.
+
+=== SECURITY & COMPLIANCE ===
+No security configs detected.
+
+=== PERFORMANCE & TESTING ===
+No performance testing configs detected.
+
+=== SCAN COMPLETE ===
