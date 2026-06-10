@@ -87,6 +87,26 @@ def _upsert_with_vector(
             _logger.warning("Pinecone upsert skipped for chunk %s: %s", chunk_id, exc)
 
 
+def embed_clarification(db: DB, project_id: str, clarification: dict) -> None:
+    """Embed a Q&A clarification pair into the RAG store after an answer is submitted."""
+    question = clarification.get("question", "")
+    answer = clarification.get("answer", "")
+    if not question or not answer:
+        return
+    text = f"Q: {question}\nA: {answer}"
+    _upsert_with_vector(
+        db,
+        project_id=project_id,
+        content_type="clarification",
+        content_id=str(clarification["id"]),
+        text=text,
+        metadata={
+            "doc_type": "clarification",
+            "priority": clarification.get("priority", "medium"),
+        },
+    )
+
+
 def embed_chunk_summaries(db: DB, project_id: str, chunk_rows: list[dict]) -> None:
     for row in chunk_rows:
         if not row.get("summary"):
