@@ -24,6 +24,13 @@ TOKEN OPTIMIZATION:
 
   5. Strict JSON schema + max_tokens=2000 cap eliminates prose padding
      (~40% output token reduction vs free-form).
+
+  6. Global constraints injection (zero extra LLM cost): cross-cutting
+     requirements (budget, testing, integrations, team_and_process topics
+     plus req_type=constraint) are extracted by the caller using a rule-based
+     filter and appended to every epic's prompt. This ensures acceptance
+     criteria reflect project-wide constraints without a separate LLM call.
+     Adds ~600 tokens per epic call (~3,000 total for 5 epics).
 """
 
 import asyncio
@@ -133,6 +140,7 @@ async def _generate_for_epic(
     epic: dict,
     requirements_by_id: dict[str, dict],
     semaphore: asyncio.Semaphore,
+    global_constraints: list[dict],
     retries: int = 4,
 ) -> tuple[list[dict], int, int, int]:
     """
@@ -140,6 +148,13 @@ async def _generate_for_epic(
 
     Context is intentionally scoped: only this epic's requirement descriptions
     are included in the prompt, not the full project requirement set.
+
+    global_constraints are cross-cutting requirements (budget, testing,
+    integrations, team_and_process topics + req_type=constraint) that apply
+    to ALL epics. They are appended as a separate block so the model reflects
+    them in acceptance criteria. Requirements already in this epic are deduped
+    out to avoid repeating context.
+
     Returns (stories, input_tokens, output_tokens, duration_ms).
     """
     epic_req_ids = [str(rid) for rid in epic.get("requirement_ids", [])]
@@ -161,6 +176,23 @@ async def _generate_for_epic(
         f"Description: {epic.get('description', '')}\n\n"
         f"Requirements for this epic ({len(epic_reqs)} items):\n{req_text}"
     )
+
+    # Inject global constraints that are NOT already in this epic's requirements.
+    # These are project-wide rules (budget limits, testing standards, integration
+    # requirements) that must be reflected in every epic's acceptance criteria.
+    epic_req_id_set = set(epic_req_ids)
+    filtered_globals = [
+        g for g in global_constraints if str(g["id"]) not in epic_req_id_set
+    ]
+    if filtered_globals:
+        constraint_text = "\n".join(
+            f"- [{g['sdlc_topic']}] {g['title']}: {g['description']}"
+            for g in filtered_globals
+        )
+        prompt += (
+            f"\n\nGlobal Constraints (apply to ALL stories in this epic — "
+            f"reflect in acceptance criteria):\n{constraint_text}"
+        )
 
     for attempt in range(retries):
         try:
@@ -212,6 +244,7 @@ async def _generate_for_epic(
 async def generate_stories_for_all_epics(
     epics: list[dict],
     requirements_by_id: dict[str, dict],
+    global_constraints: list[dict] | None = None,
 ) -> list[tuple[dict, list[dict], int, int, int]]:
     """
     Generate stories for all epics in parallel.
@@ -219,14 +252,20 @@ async def generate_stories_for_all_epics(
     Parallelism is the key time optimization: all N epics run concurrently
     so wall-clock time ≈ time of one call, not N × one call.
 
+    global_constraints: cross-cutting requirements injected into every epic's
+    prompt so acceptance criteria reflect project-wide constraints. Pass an
+    empty list (or None) to skip injection.
+
     Returns list of (epic, stories, input_tokens, output_tokens, duration_ms).
     """
+    constraints = global_constraints or []
+
     # Semaphore created here — belongs to current event loop, shared across
     # all parallel epic calls to respect the Groq 30 req/min rate limit.
     semaphore = asyncio.Semaphore(5)
 
     tasks = [
-        _generate_for_epic(epic, requirements_by_id, semaphore)
+        _generate_for_epic(epic, requirements_by_id, semaphore, constraints)
         for epic in epics
     ]
     results = await asyncio.gather(*tasks)
