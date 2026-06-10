@@ -1513,21 +1513,52 @@ with tab_epics:
                     st.rerun()
             elif s2_status == "ready":
                 st.markdown("<br>", unsafe_allow_html=True)
+
+                # Show push result that survived the last rerun (session_state persists across reruns)
+                _push_msg = st.session_state.pop("_ado_push_result", None)
+                if _push_msg:
+                    if _push_msg.get("errors"):
+                        st.warning(f"Pushed {_push_msg['epics_pushed']} epics, {_push_msg['stories_pushed']} stories — {len(_push_msg['errors'])} errors.")
+                        for err in _push_msg["errors"][:5]:
+                            st.caption(f"  • {err}")
+                    else:
+                        st.success(f"Pushed {_push_msg['epics_pushed']} epics and {_push_msg['stories_pushed']} user stories to Azure DevOps.")
+
+                # ADO area path config — pre-filled with project name, user can override
+                _ap_key = f"_ado_area_path_{project_id}"
+                if _ap_key not in st.session_state:
+                    st.session_state[_ap_key] = st.session_state.get("project_name", "")
+                with st.expander("⚙️ ADO Settings", expanded=False):
+                    st.text_input(
+                        "Area path (sub-area under your ADO project)",
+                        key=_ap_key,
+                        placeholder="e.g. MediBook",
+                        help=(
+                            "StackForge will create StackForge\\<area path> in ADO automatically. "
+                            "Clear this field to push to the ADO project default area instead."
+                        ),
+                    )
+                    st.caption(
+                        "If auto-create fails (permissions), create the area in ADO first: "
+                        "**Project Settings → Boards → Area → New child node**, then push."
+                    )
+                _area_path = st.session_state.get(_ap_key, "")
+
                 ado_label = "✓ Pushed to ADO" if ado_pushed else "🚀  Push to Azure DevOps"
                 ado_type = "secondary" if ado_pushed else "primary"
+                _push_url = f"/projects/{project_id}/push-to-ado"
+                if _area_path:
+                    _push_url += f"?area_path={_area_path}"
                 if st.button(ado_label, key="btn_push_ado", type=ado_type, use_container_width=True):
                     with st.spinner("Pushing to Azure DevOps…"):
-                        push_result = api_post(f"/projects/{project_id}/push-to-ado")
+                        push_result = api_post(_push_url)
                     if push_result:
-                        pushed_epics = push_result.get("epics_pushed", 0)
-                        pushed_stories = push_result.get("stories_pushed", 0)
-                        errors = push_result.get("errors", [])
-                        if errors:
-                            st.warning(f"Pushed {pushed_epics} epics, {pushed_stories} stories — {len(errors)} errors.")
-                            for err in errors[:5]:
-                                st.caption(f"  • {err}")
-                        else:
-                            st.success(f"Pushed {pushed_epics} epics and {pushed_stories} user stories to Azure DevOps.")
+                        # Store in session_state so result survives the rerun below
+                        st.session_state["_ado_push_result"] = {
+                            "epics_pushed": push_result.get("epics_pushed", 0),
+                            "stories_pushed": push_result.get("stories_pushed", 0),
+                            "errors": push_result.get("errors", []),
+                        }
                         cached_get.clear()
                         st.rerun()
 
