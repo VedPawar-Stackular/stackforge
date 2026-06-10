@@ -12,7 +12,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from api.models import StitchGenerateResponse, StitchScreen, StitchStatusResponse
-from pipeline.doc_writer import get_doc_path, get_output_dir
+from pipeline.doc_writer import get_output_dir
 
 router = APIRouter()
 _logger = logging.getLogger(__name__)
@@ -35,13 +35,6 @@ async def generate_stitch(project_id: str, background_tasks: BackgroundTasks):
                 "STITCH_API_KEY is not configured. "
                 "Add it to poc/.env (get it at stitch.withgoogle.com → Settings → API Keys)."
             ),
-        )
-
-    design_path = get_doc_path(project_id, "design")
-    if not os.path.exists(design_path):
-        raise HTTPException(
-            status_code=404,
-            detail="design.md not found for this project. Run the ingestion pipeline first.",
         )
 
     # Mark status as "generating" immediately so the UI can poll
