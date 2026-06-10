@@ -1,17 +1,23 @@
 """Routes: Stage 2 — Epic & User Story generation and Azure DevOps push."""
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from api.models import (
-    AdoPushResponse,
     EpicResponse,
     Stage2MetricsResponse,
     Stage2StatusResponse,
     StoryResponse,
 )
+from config import ADO_ORG, ADO_PAT, ADO_PROJECT
 from db import DB
+from pipeline.metrics_calculator import get_metrics_report
+from pipeline.stage2_runner import push_to_ado as _push_to_ado
+from pipeline.stage2_runner import run_stage2
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["epics"])
 
@@ -41,7 +47,6 @@ def trigger_generate_epics(project_id: str, background_tasks: BackgroundTasks):
 
 def _run_stage2_sync(project_id: str) -> None:
     """Adapter: runs the async Stage 2 pipeline in a background thread."""
-    from pipeline.stage2_runner import run_stage2
     asyncio.run(run_stage2(project_id))
 
 
@@ -83,15 +88,17 @@ def list_epics(project_id: str):
             "SELECT * FROM epics WHERE project_id = %s ORDER BY created_at",
             (project_id,),
         )
+        # Single query for all story counts — avoids N+1 round trips
+        counts_rows = db.fetch_all(
+            "SELECT epic_id, COUNT(*) AS cnt FROM user_stories WHERE project_id = %s GROUP BY epic_id",
+            (project_id,),
+        )
+        story_counts = {str(r["epic_id"]): int(r["cnt"]) for r in counts_rows}
         result = []
         for epic in epics:
-            story_count_row = db.fetch_one(
-                "SELECT COUNT(*) AS cnt FROM user_stories WHERE epic_id = %s",
-                (str(epic["id"]),),
-            )
             result.append({
                 **{k: (str(v) if k in ("id",) else v) for k, v in epic.items()},
-                "story_count": int(story_count_row["cnt"]) if story_count_row else 0,
+                "story_count": story_counts.get(str(epic["id"]), 0),
             })
     return result
 
@@ -119,9 +126,10 @@ def list_stories(project_id: str, epic_id: str):
     ]
 
 
-@router.post("/push-to-ado", response_model=AdoPushResponse)
+@router.post("/push-to-ado", status_code=202)
 def push_to_ado(
     project_id: str,
+    background_tasks: BackgroundTasks,
     area_path: str = Query(
         "",
         description=(
@@ -131,8 +139,9 @@ def push_to_ado(
     ),
 ):
     """
-    Push all generated epics and user stories to Azure DevOps.
+    Push all generated epics and user stories to Azure DevOps (background task).
     Requires ADO_ORG, ADO_PROJECT, ADO_PAT in poc/.env.
+    Poll /stage2-status for ado_pushed completion.
     """
     with DB() as db:
         if not db.fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,)):
@@ -147,10 +156,34 @@ def push_to_ado(
             )
 
     try:
-        from pipeline.stage2_runner import push_to_ado as _push
-        return _push(project_id, area_path=area_path)
+        if not all([ADO_ORG, ADO_PROJECT, ADO_PAT]):
+            raise ValueError(
+                "ADO_ORG, ADO_PROJECT, and ADO_PAT must be set in poc/.env "
+                "before pushing to Azure DevOps"
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    background_tasks.add_task(_run_ado_push_sync, project_id, area_path)
+    return {"status": "pushing", "message": "ADO push started. Poll /stage2-status for completion."}
+
+
+def _run_ado_push_sync(project_id: str, area_path: str) -> None:
+    """Run the synchronous ADO push in a background thread."""
+    try:
+        result = _push_to_ado(project_id, area_path=area_path)
+        _logger.info(
+            "ADO push complete for %s: %d epics, %d stories, %d errors",
+            project_id,
+            result.get("epics_pushed", 0),
+            result.get("stories_pushed", 0),
+            len(result.get("errors", [])),
+        )
+        if result.get("errors"):
+            for err in result["errors"]:
+                _logger.warning("ADO push error: %s", err)
+    except Exception:
+        _logger.exception("ADO push failed for project %s", project_id)
 
 
 @router.get("/stage2-metrics", response_model=Stage2MetricsResponse)
@@ -160,5 +193,4 @@ def get_stage2_metrics(project_id: str):
         if not db.fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,)):
             raise HTTPException(status_code=404, detail="Project not found")
 
-    from pipeline.metrics_calculator import get_metrics_report
     return get_metrics_report(project_id)

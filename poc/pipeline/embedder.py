@@ -11,10 +11,13 @@ and the system falls back to BM25-only retrieval.
 
 import hashlib
 import json
+import logging
 import uuid
 
 from config import PINECONE_ENABLED
 from db import DB
+
+_logger = logging.getLogger(__name__)
 
 
 def _hash(text: str) -> str:
@@ -71,13 +74,17 @@ def _upsert_with_vector(
     """
     chunk_id = upsert_rag_chunk(db, project_id, content_type, content_id, text, metadata)
     if chunk_id and PINECONE_ENABLED:
-        from rag.pinecone_client import upsert_chunk
-        upsert_chunk(
-            chunk_id=chunk_id,
-            text=text,
-            project_id=project_id,
-            metadata={"content_type": content_type, "content_id": content_id, **metadata},
-        )
+        try:
+            from rag.pinecone_client import upsert_chunk
+            upsert_chunk(
+                chunk_id=chunk_id,
+                text=text,
+                project_id=project_id,
+                metadata={"content_type": content_type, "content_id": content_id, **metadata},
+            )
+        except Exception as exc:
+            # Pinecone is optional — log and continue so DB writes are not rolled back
+            _logger.warning("Pinecone upsert skipped for chunk %s: %s", chunk_id, exc)
 
 
 def embed_chunk_summaries(db: DB, project_id: str, chunk_rows: list[dict]) -> None:
@@ -114,23 +121,3 @@ def embed_requirements(db: DB, project_id: str, req_rows: list[dict]) -> None:
                 "confidence": str(row.get("confidence", 0.8)),
             },
         )
-
-
-def embed_clarification(db: DB, project_id: str, clarification_row: dict) -> None:
-    if not clarification_row.get("answer"):
-        return
-    text = (
-        f"Q: {clarification_row['question']}\n"
-        f"A: {clarification_row['answer']}"
-    )
-    _upsert_with_vector(
-        db,
-        project_id=project_id,
-        content_type="clarification",
-        content_id=str(clarification_row["id"]),
-        text=text,
-        metadata={
-            "doc_type": "clarification",
-            "priority": clarification_row.get("priority", "medium"),
-        },
-    )

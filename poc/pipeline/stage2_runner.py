@@ -16,11 +16,16 @@ ADO push is intentionally separate — generation and sync are decoupled so
 the lead engineer can review stories before pushing.
 """
 
+import logging
 import uuid
 
+from config import ADO_ORG, ADO_PAT, ADO_PROJECT, MODEL_CAPABLE, MODEL_CHEAP
 from db import DB
+from pipeline.ado_client import create_epic, create_user_story, ensure_area_path
 from pipeline.epic_generator import generate_epics
 from pipeline.story_generator import generate_stories_for_all_epics
+
+_logger = logging.getLogger(__name__)
 
 _GLOBAL_CONSTRAINT_TOPICS = frozenset(
     {"budget", "testing", "integrations", "team_and_process"}
@@ -205,9 +210,6 @@ def push_to_ado(project_id: str, area_path: str = "") -> dict:
     sequentially: epics first, then their child stories.
     Returns {epics_pushed, stories_pushed, errors[]}.
     """
-    from config import ADO_ORG, ADO_PAT, ADO_PROJECT
-    from pipeline.ado_client import create_epic, create_user_story, ensure_area_path
-
     if not all([ADO_ORG, ADO_PROJECT, ADO_PAT]):
         raise ValueError(
             "ADO_ORG, ADO_PROJECT, and ADO_PAT must be set in poc/.env "
@@ -220,9 +222,6 @@ def push_to_ado(project_id: str, area_path: str = "") -> dict:
             "SELECT * FROM epics WHERE project_id = %s ORDER BY created_at",
             (project_id,),
         )
-
-    import logging as _log
-    _logger = _log.getLogger(__name__)
 
     project_name = proj_row["name"] if proj_row else project_id
 
@@ -312,7 +311,6 @@ def _log_metrics(
     output_tokens: int,
     duration_ms: int,
 ) -> None:
-    from config import MODEL_CAPABLE, MODEL_CHEAP
     model = MODEL_CHEAP if step == "epic_decomposition" else MODEL_CAPABLE
     with DB() as db:
         db.execute(

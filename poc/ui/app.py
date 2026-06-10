@@ -1550,15 +1550,18 @@ with tab_epics:
                 if _area_path:
                     _push_url += f"?area_path={_area_path}"
                 if st.button(ado_label, key="btn_push_ado", type=ado_type, use_container_width=True):
-                    with st.spinner("Pushing to Azure DevOps…"):
-                        push_result = api_post(_push_url)
+                    push_result = api_post(_push_url)
                     if push_result:
-                        # Store in session_state so result survives the rerun below
-                        st.session_state["_ado_push_result"] = {
-                            "epics_pushed": push_result.get("epics_pushed", 0),
-                            "stories_pushed": push_result.get("stories_pushed", 0),
-                            "errors": push_result.get("errors", []),
-                        }
+                        if push_result.get("status") == "pushing":
+                            # Background push started — counts not available yet
+                            st.info("ADO push started. Refresh the page in a moment to see updated status.")
+                        else:
+                            # Legacy sync response (future fallback)
+                            st.session_state["_ado_push_result"] = {
+                                "epics_pushed": push_result.get("epics_pushed", 0),
+                                "stories_pushed": push_result.get("stories_pushed", 0),
+                                "errors": push_result.get("errors", []),
+                            }
                         cached_get.clear()
                         st.rerun()
 

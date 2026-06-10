@@ -11,6 +11,7 @@ from pipeline.runner import ingest_document
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
 
 ALLOWED_TYPES = {"pdf", "docx", "txt"}
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
 
 @router.post("", response_model=DocumentResponse, status_code=202)
@@ -37,6 +38,11 @@ async def upload_document(
         )
 
     file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+        )
     client_id = str(project["client_id"])
 
     # Kick off the pipeline in the background so the response is instant

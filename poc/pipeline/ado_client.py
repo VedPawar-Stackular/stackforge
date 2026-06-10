@@ -12,6 +12,7 @@ Epic → User Story hierarchy is created via System.LinkTypes.Hierarchy-Reverse
 """
 
 import base64
+import html
 import json
 
 import httpx
@@ -104,8 +105,9 @@ def create_user_story(
     Returns (work_item_id, work_item_url).
     area_path: if empty, omitted and ADO uses project default.
     """
-    # ADO's AcceptanceCriteria field is HTML rich-text
-    ac_html = "<ul>" + "".join(f"<li>{ac}</li>" for ac in acceptance_criteria) + "</ul>"
+    # ADO's AcceptanceCriteria field is HTML rich-text.
+    # html.escape() prevents AI-generated content from injecting script tags.
+    ac_html = "<ul>" + "".join(f"<li>{html.escape(ac)}</li>" for ac in acceptance_criteria) + "</ul>"
 
     body = [
         {"op": "add", "path": "/fields/System.Title", "value": title},

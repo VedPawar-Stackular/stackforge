@@ -38,11 +38,12 @@ import json
 import random
 import time
 
-from openai import AsyncOpenAI, RateLimitError
+from openai import RateLimitError
 
-from config import GROQ_API_KEY, LLM_BASE_URL, MODEL_CAPABLE
+from config import MODEL_CAPABLE
+from pipeline.llm_utils import get_llm_client
 
-_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
+_client = get_llm_client()
 
 # Static system prompt with 2 few-shot examples.
 # Format is demonstrated, not described — shorter prompt, better consistency.

@@ -12,6 +12,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from api.models import StitchGenerateResponse, StitchScreen, StitchStatusResponse
+from api.routes import validate_project_id
 from pipeline.doc_writer import get_output_dir
 
 router = APIRouter()
@@ -26,6 +27,7 @@ async def generate_stitch(project_id: str, background_tasks: BackgroundTasks):
     Runs in the background. Use GET /stitch to poll for completion.
     Requires STITCH_API_KEY in poc/.env and Node.js installed.
     """
+    validate_project_id(project_id)
     from config import STITCH_API_KEY
 
     if not STITCH_API_KEY:
@@ -70,6 +72,7 @@ async def _run_generation(project_id: str, flag_path: str, error_path: str) -> N
 @router.get("/projects/{project_id}/stitch", response_model=StitchStatusResponse)
 def get_stitch_status(project_id: str):
     """Return Stitch generation status and screen list for the project."""
+    validate_project_id(project_id)
     stitch_dir = os.path.join(get_output_dir(project_id), "stitch")
     metadata_path = os.path.join(stitch_dir, "metadata.json")
     flag_path = os.path.join(stitch_dir, ".generating")

@@ -5,13 +5,16 @@ questions about ambiguities, gaps, and unstated assumptions.
 Uses the cheap model (llama-3.1-8b-instant / Haiku).
 """
 
+import asyncio
 import json
+import random
 
-from openai import AsyncOpenAI
+from openai import RateLimitError
 
-from config import GROQ_API_KEY, LLM_BASE_URL, MODEL_CHEAP
+from config import MODEL_CHEAP
+from pipeline.llm_utils import get_llm_client
 
-_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
+_client = get_llm_client()
 
 _SYSTEM_PROMPT = (
     "You are a requirements analyst preparing a project for software development. "
@@ -28,28 +31,37 @@ _SYSTEM_PROMPT = (
 )
 
 
-async def generate_clarifications(requirements: list[dict]) -> list[dict]:
+async def generate_clarifications(requirements: list[dict], retries: int = 4) -> list[dict]:
     """
     Takes a list of requirement dicts, returns list of clarification question dicts.
     requirements: list of {req_type, title, description, confidence}
     """
-    # Format requirements as a readable list for the model
     req_text = "\n".join(
         f"[{r['req_type'].upper()}] {r['title']}: {r['description']}"
         for r in requirements
     )
-
-    response = await _client.chat.completions.create(
-        model=MODEL_CHEAP,
-        max_tokens=1024,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"Analyse these requirements and generate clarification questions:\n\n{req_text}",
-            },
-        ],
-    )
-    data = json.loads(response.choices[0].message.content)
-    return data.get("clarifications", [])
+    for attempt in range(retries):
+        try:
+            response = await _client.chat.completions.create(
+                model=MODEL_CHEAP,
+                max_tokens=1024,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": f"Analyse these requirements and generate clarification questions:\n\n{req_text}",
+                    },
+                ],
+            )
+            try:
+                data = json.loads(response.choices[0].message.content)
+            except json.JSONDecodeError:
+                data = {}
+            return data.get("clarifications", [])
+        except RateLimitError:
+            if attempt == retries - 1:
+                raise
+            wait = (2 ** attempt) + random.uniform(0, 1)
+            await asyncio.sleep(wait)
+    return []

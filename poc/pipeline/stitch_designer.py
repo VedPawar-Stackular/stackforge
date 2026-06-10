@@ -29,15 +29,18 @@ import json
 import logging
 import os
 import random
+import re
 
-from openai import AsyncOpenAI, RateLimitError
+from openai import RateLimitError
 
-from config import GROQ_API_KEY, LLM_BASE_URL, MODEL_CHEAP, STITCH_API_KEY
+from config import MODEL_CHEAP, STITCH_API_KEY
 from db import DB
 from pipeline.doc_writer import get_doc_path, get_output_dir
+from pipeline.llm_utils import get_llm_client
+from pipeline.utils import get_project_name
 
 _logger = logging.getLogger(__name__)
-_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
+_client = get_llm_client()
 
 # ─── Screen extraction ───────────────────────────────────────────────────────
 
@@ -248,7 +251,8 @@ async def generate_stitch_designs(project_id: str, project_name: str, screens: l
                                 or code_data.get("content", "")
                             )
                             if html_content and isinstance(html_content, str):
-                                html_filename = f"{screen['name']}.html"
+                                safe_name = re.sub(r"[^a-z0-9_\-]", "_", screen["name"].lower())
+                                html_filename = f"{safe_name}.html"
                                 with open(os.path.join(screens_dir, html_filename), "w", encoding="utf-8") as f:
                                     f.write(html_content)
                                 screen_meta.append({
@@ -402,7 +406,7 @@ async def generate_for_project(project_id: str) -> str:
 
     Returns the absolute path of poc/output/{project_id}/stitch/.
     """
-    project_name = _get_project_name(project_id)
+    project_name = get_project_name(project_id)
 
     # Always load design.md (may be empty/missing — that's fine)
     design_md_path = get_doc_path(project_id, "design")
@@ -426,7 +430,7 @@ async def generate_for_project(project_id: str) -> str:
 
     screens: list[dict] = []
 
-    if combined_context.strip() != f"Project: {project_name}":
+    if design_content or all_reqs_text:
         screens = await extract_screens(combined_context)
 
     if not screens:
@@ -461,9 +465,3 @@ async def generate_for_project(project_id: str) -> str:
     )
     # Pass combined_context to _generate_design_md so DESIGN.md is also rich
     return await generate_stitch_designs(project_id, project_name, screens, combined_context)
-
-
-def _get_project_name(project_id: str) -> str:
-    with DB() as db:
-        row = db.fetch_one("SELECT name FROM projects WHERE id = %s", (project_id,))
-    return row["name"] if row else project_id

@@ -6,12 +6,11 @@ plain-English edit instruction to the cheap model, writes the result back,
 and returns the updated content.
 """
 
-from openai import AsyncOpenAI
-
-from config import GROQ_API_KEY, LLM_BASE_URL, MODEL_CHEAP
+from config import MODEL_CHEAP
 from pipeline.doc_writer import get_doc_path
+from pipeline.llm_utils import get_llm_client
 
-_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
+_client = get_llm_client()
 
 _SYSTEM_PROMPT = (
     "You are a technical documentation editor. "

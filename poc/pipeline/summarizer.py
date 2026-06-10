@@ -10,14 +10,12 @@ import asyncio
 import json
 import random
 
-from openai import AsyncOpenAI, RateLimitError
+from openai import RateLimitError
 
-from config import GROQ_API_KEY, LLM_BASE_URL, MODEL_CHEAP
+from config import MODEL_CHEAP
+from pipeline.llm_utils import get_llm_client
 
-_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
-
-# Max concurrent Groq API calls across the whole process
-_semaphore = asyncio.Semaphore(5)
+_client = get_llm_client()
 
 _SYSTEM_PROMPT = (
     "You are a requirements analyst assistant. Summarise the provided document "
@@ -28,11 +26,11 @@ _SYSTEM_PROMPT = (
 )
 
 
-async def _summarize_with_retry(raw_text: str, retries: int = 4) -> str:
+async def _summarize_with_retry(raw_text: str, semaphore: asyncio.Semaphore, retries: int = 4) -> str:
     """Call the cheap model with exponential backoff on rate-limit errors."""
     for attempt in range(retries):
         try:
-            async with _semaphore:
+            async with semaphore:
                 response = await _client.chat.completions.create(
                     model=MODEL_CHEAP,
                     max_tokens=300,
@@ -55,14 +53,16 @@ async def _summarize_with_retry(raw_text: str, retries: int = 4) -> str:
             wait = (2 ** attempt) + random.uniform(0, 1)
             await asyncio.sleep(wait)
 
-    return ""
-
-
-async def summarize_chunk(raw_text: str) -> str:
-    return await _summarize_with_retry(raw_text)
+    raise RuntimeError("summarize_chunk: all retries exhausted without a result")
 
 
 async def summarize_all(chunks: list[str]) -> list[str]:
-    """Summarise all chunks with rate-limit-safe concurrency."""
-    tasks = [summarize_chunk(c) for c in chunks]
+    """Summarise all chunks with rate-limit-safe concurrency.
+
+    Semaphore is created here so it is bound to the current event loop,
+    not the loop that was active at import time (which may differ when
+    called via asyncio.run() in a FastAPI background thread).
+    """
+    semaphore = asyncio.Semaphore(5)
+    tasks = [_summarize_with_retry(c, semaphore) for c in chunks]
     return await asyncio.gather(*tasks)

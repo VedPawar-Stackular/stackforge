@@ -10,14 +10,22 @@ Steps:
   6. Generate clarification questions (cheap model) → clarifications table
 """
 
+import hashlib
+import logging
+import os
 import uuid
 
 from db import DB
 from pipeline.chunker import chunk
 from pipeline.clarifier import generate_clarifications
+from pipeline.doc_writer import write_sdlc_docs
 from pipeline.embedder import embed_chunk_summaries, embed_requirements
 from pipeline.extractor import extract_requirements
+from pipeline.parser import parse
 from pipeline.summarizer import summarize_all
+from pipeline.utils import get_project_name
+
+_logger = logging.getLogger(__name__)
 
 
 async def run_pipeline_for_project(project_id: str, doc_paths: list[str]) -> None:
@@ -25,8 +33,6 @@ async def run_pipeline_for_project(project_id: str, doc_paths: list[str]) -> Non
     Run the full ingestion pipeline for a project given file paths on disk.
     Used by the seed script (--run-pipeline flag).
     """
-    import os
-
     with DB() as db:
         client_id = _get_client_id(db, project_id)
         db.execute(
@@ -59,10 +65,6 @@ async def ingest_document(
     Full pipeline for a single document. Returns document ID.
     Called by the FastAPI /documents upload endpoint.
     """
-    import hashlib
-
-    from pipeline.parser import parse
-
     content_hash = hashlib.sha256(file_bytes).hexdigest()
     doc_id = str(uuid.uuid4())
 
@@ -176,13 +178,10 @@ async def ingest_document(
 
         # ── Step 7: Write SDLC topic .md docs ────────────────────────────────
         try:
-            from pipeline.doc_writer import write_sdlc_docs
-            project_name = _get_project_name(project_id)
+            project_name = get_project_name(project_id)
             write_sdlc_docs(project_id, project_name)
         except Exception as doc_err:
-            # Doc generation failing must not block the pipeline completing
-            import logging
-            logging.getLogger(__name__).warning("doc_writer failed: %s", doc_err)
+            _logger.warning("doc_writer failed: %s", doc_err)
 
         # ── Mark document done ────────────────────────────────────────────────
         with DB() as db:
@@ -215,9 +214,3 @@ def _get_client_id(db: DB, project_id: str) -> str:
     if not row:
         raise ValueError(f"Project not found: {project_id}")
     return str(row["client_id"])
-
-
-def _get_project_name(project_id: str) -> str:
-    with DB() as db:
-        row = db.fetch_one("SELECT name FROM projects WHERE id = %s", (project_id,))
-    return row["name"] if row else project_id

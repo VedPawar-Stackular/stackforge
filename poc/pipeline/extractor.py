@@ -6,13 +6,16 @@ Output: list of structured requirement dicts, each classified by both
         req_type and sdlc_topic.
 """
 
+import asyncio
 import json
+import random
 
-from openai import AsyncOpenAI
+from openai import RateLimitError
 
-from config import GROQ_API_KEY, LLM_BASE_URL, MODEL_CAPABLE, SDLC_TOPICS
+from config import MODEL_CAPABLE, SDLC_TOPICS
+from pipeline.llm_utils import get_llm_client
 
-_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
+_client = get_llm_client()
 
 _SDLC_TOPIC_LIST = ", ".join(SDLC_TOPICS)
 
@@ -50,27 +53,40 @@ _VALID_SDLC_TOPICS = set(SDLC_TOPICS)
 _VALID_REQ_TYPES = {"functional", "non_functional", "constraint", "assumption"}
 
 
-async def extract_requirements(summaries: list[str], document_ids: list[str]) -> list[dict]:
+async def extract_requirements(summaries: list[str], document_ids: list[str], retries: int = 4) -> list[dict]:
     """
     Takes all chunk summaries for a project, returns list of requirement dicts.
     Each dict includes req_type, sdlc_topic, title, description, confidence.
     document_ids: list of document UUIDs that contributed to these summaries.
     """
     combined = "\n\n---\n\n".join(summaries)
-    response = await _client.chat.completions.create(
-        model=MODEL_CAPABLE,
-        max_tokens=4096,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"Extract all requirements from these document summaries:\n\n{combined}",
-            },
-        ],
-    )
-    data = json.loads(response.choices[0].message.content)
-    reqs = data.get("requirements", [])
+    for attempt in range(retries):
+        try:
+            response = await _client.chat.completions.create(
+                model=MODEL_CAPABLE,
+                max_tokens=4096,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": f"Extract all requirements from these document summaries:\n\n{combined}",
+                    },
+                ],
+            )
+            try:
+                data = json.loads(response.choices[0].message.content)
+            except json.JSONDecodeError:
+                data = {}
+            reqs = data.get("requirements", [])
+            break
+        except RateLimitError:
+            if attempt == retries - 1:
+                raise
+            wait = (2 ** attempt) + random.uniform(0, 1)
+            await asyncio.sleep(wait)
+    else:
+        reqs = []
 
     for r in reqs:
         r["source_document_ids"] = document_ids

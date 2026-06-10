@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from api.models import DocContentResponse, DocEditRequest, DocEditResponse, DocMetaResponse
+from api.routes import validate_project_id
 from config import SDLC_TOPICS
 from pipeline.doc_writer import get_doc_path
 
@@ -21,6 +22,7 @@ router = APIRouter()
 @router.get("/projects/{project_id}/docs", response_model=list[DocMetaResponse])
 def list_docs(project_id: str):
     """Return metadata for all 8 SDLC topic docs for this project."""
+    validate_project_id(project_id)
     results = []
     for topic in SDLC_TOPICS:
         path = get_doc_path(project_id, topic)
@@ -47,6 +49,7 @@ def list_docs(project_id: str):
 @router.get("/projects/{project_id}/docs/{topic}", response_model=DocContentResponse)
 def get_doc(project_id: str, topic: str):
     """Return the markdown content of a single SDLC topic doc."""
+    validate_project_id(project_id)
     if topic not in SDLC_TOPICS:
         raise HTTPException(status_code=400, detail=f"Unknown topic '{topic}'. Valid: {SDLC_TOPICS}")
     path = get_doc_path(project_id, topic)
@@ -68,6 +71,7 @@ def get_doc(project_id: str, topic: str):
 @router.post("/projects/{project_id}/docs/{topic}/edit", response_model=DocEditResponse)
 async def edit_doc(project_id: str, topic: str, body: DocEditRequest):
     """Apply a plain-English edit instruction to the doc and return updated content."""
+    validate_project_id(project_id)
     if topic not in SDLC_TOPICS:
         raise HTTPException(status_code=400, detail=f"Unknown topic '{topic}'. Valid: {SDLC_TOPICS}")
     path = get_doc_path(project_id, topic)

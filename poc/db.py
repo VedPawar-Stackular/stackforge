@@ -24,12 +24,13 @@ def _conn_kwargs() -> dict:
         "password": p.password or "",
         "database": p.path.lstrip("/"),
     }
-    # Neon and other hosted providers require SSL
+    # Neon and other hosted providers require SSL.
+    # server_hostname is passed explicitly to fix pg8000 SNI on some platforms.
+    # Cert verification is intentionally left enabled (no CERT_NONE) to prevent MITM.
     if "sslmode=require" in DATABASE_URL:
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         kwargs["ssl_context"] = ctx
+        kwargs["server_hostname"] = kwargs["host"]
     return kwargs
 
 

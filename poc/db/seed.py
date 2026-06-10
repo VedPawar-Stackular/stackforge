@@ -218,9 +218,8 @@ def get_conn():
     }
     if "sslmode=require" in DB_URL:
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         kwargs["ssl_context"] = ctx
+        kwargs["server_hostname"] = kwargs["host"]
     conn = pg8000.dbapi.connect(**kwargs)
     conn.autocommit = False
     return conn

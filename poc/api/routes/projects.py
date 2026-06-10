@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 
 from api.models import CreateProjectRequest, ProjectResponse, ProjectStatusResponse
+from api.routes import validate_project_id
 from db import DB
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -56,6 +57,7 @@ def delete_project(project_id: str):
     The DB cascade handles most child tables. rag_chunks has no FK constraint
     so it must be deleted explicitly before the project row is removed.
     """
+    validate_project_id(project_id)
     with DB() as db:
         if not db.fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,)):
             raise HTTPException(status_code=404, detail="Project not found")
