@@ -354,32 +354,103 @@ def _save_stitch_to_db(project_id: str, stitch_project_id: str, stitch_project_u
 
 # ─── Public entry point ──────────────────────────────────────────────────────
 
+def _fetch_all_requirements_text(project_id: str) -> str:
+    """
+    Fetch all requirements across all SDLC topics and format as compact text.
+
+    Used as fallback when design.md is empty or missing — functional,
+    technical, and integration requirements still describe what screens exist.
+    Returns empty string if the project has no requirements.
+    """
+    with DB() as db:
+        rows = db.fetch_all(
+            "SELECT sdlc_topic, title, description "
+            "FROM requirements WHERE project_id = %s ORDER BY sdlc_topic, title",
+            (project_id,),
+        )
+    if not rows:
+        return ""
+
+    grouped: dict[str, list[str]] = {}
+    for r in rows:
+        topic = r.get("sdlc_topic") or "requirements"
+        grouped.setdefault(topic, []).append(f"- {r['title']}: {r['description']}")
+
+    lines = ["# Project Requirements (all topics)"]
+    for topic, items in grouped.items():
+        lines.append(f"\n## {topic.replace('_', ' ').title()}")
+        lines.extend(items)
+    return "\n".join(lines)
+
+
 async def generate_for_project(project_id: str) -> str:
     """
     Reads design.md, extracts screens, generates the Stitch project.
+
+    Falls back gracefully when design.md is missing or has no requirements:
+      1. Try design.md content
+      2. Try all extracted requirements across all topics
+      3. Static 3-screen fallback keyed to project name
     Returns the absolute path of poc/output/{project_id}/stitch/.
     """
-    design_md_path = get_doc_path(project_id, "design")
-    if not os.path.exists(design_md_path):
-        raise FileNotFoundError(
-            f"design.md not found for project {project_id}. Run the ingestion pipeline first."
-        )
-
-    with open(design_md_path, encoding="utf-8") as f:
-        design_content = f.read()
-
     project_name = _get_project_name(project_id)
 
-    screens = await extract_screens(design_content)
+    # Step 1: try design.md
+    design_md_path = get_doc_path(project_id, "design")
+    try:
+        with open(design_md_path, encoding="utf-8") as f:
+            design_content = f.read()
+    except OSError:
+        design_content = ""
+
+    screens = await extract_screens(design_content) if design_content.strip() else []
+
+    # Step 2: no screens from design.md — use all requirements as broader context
     if not screens:
-        raise ValueError(
-            "Could not extract any screens from design.md. "
-            "Check that the project has design requirements."
+        _logger.info(
+            "No screens from design.md for project %s — falling back to all requirements",
+            project_id,
         )
+        all_reqs_text = _fetch_all_requirements_text(project_id)
+        if all_reqs_text:
+            fallback_context = (
+                f"Project: {project_name}\n\n"
+                f"No explicit design requirements found. "
+                f"Use the requirements below to infer the key screens.\n\n"
+                f"{all_reqs_text}"
+            )
+            screens = await extract_screens(fallback_context)
+
+    # Step 3: still nothing — static screens based on project name
+    if not screens:
+        _logger.info(
+            "No screens inferred from requirements for project %s — using static fallback",
+            project_id,
+        )
+        screens = [
+            {
+                "name": "dashboard",
+                "label": "Dashboard",
+                "device": "desktop",
+                "prompt": f"{project_name} main dashboard with key metrics and navigation.",
+            },
+            {
+                "name": "list_view",
+                "label": "List View",
+                "device": "desktop",
+                "prompt": f"{project_name} item list with search, filters, and pagination.",
+            },
+            {
+                "name": "detail_view",
+                "label": "Detail View",
+                "device": "mobile",
+                "prompt": f"{project_name} detail page showing full information and available actions.",
+            },
+        ]
 
     _logger.info(
-        "Extracted %d screens for project %s: %s",
-        len(screens), project_id, [s["name"] for s in screens],
+        "Generating Stitch project for %s with %d screens: %s",
+        project_id, len(screens), [s["name"] for s in screens],
     )
     return await generate_stitch_designs(project_id, project_name, screens, design_content)
 
