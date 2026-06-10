@@ -40,18 +40,53 @@ def _post_work_item(work_item_type: str, body: list[dict]) -> tuple[int, str]:
     url = f"{_base_url()}/workitems/${work_item_type}?api-version={ADO_API_VERSION}"
     with httpx.Client(timeout=30) as client:
         response = client.post(url, headers=_headers(), content=json.dumps(body))
-        response.raise_for_status()
+        if not response.is_success:
+            # Include ADO's response body so the actual reason is visible in the UI
+            try:
+                ado_error = response.json().get("message", response.text)
+            except Exception:
+                ado_error = response.text
+            raise RuntimeError(
+                f"ADO {response.status_code} creating {work_item_type}: {ado_error}"
+            )
         data = response.json()
     return int(data["id"]), data["url"]
 
 
-def create_epic(title: str, description: str) -> tuple[int, str]:
-    """Create an Epic work item. Returns (work_item_id, work_item_url)."""
+def ensure_area_path(area_name: str) -> str:
+    """
+    Create a child area node under the root ADO project area if it doesn't exist.
+    Idempotent — 409 Conflict (already exists) is treated as success.
+    Returns the full area path string: "{ADO_PROJECT}\\{area_name}".
+    """
+    url = (
+        f"https://dev.azure.com/{ADO_ORG}/{ADO_PROJECT}/_apis/wit/classificationnodes/areas"
+        f"?api-version={ADO_API_VERSION}"
+    )
+    headers = {
+        "Authorization": _auth_header(),
+        "Content-Type": "application/json",
+    }
+    with httpx.Client(timeout=30) as client:
+        response = client.post(url, headers=headers, content=json.dumps({"name": area_name}))
+        if response.status_code not in (200, 201, 409):
+            response.raise_for_status()
+    return f"{ADO_PROJECT}\\{area_name}"
+
+
+def create_epic(title: str, description: str, area_path: str = "", tags: str = "") -> tuple[int, str]:
+    """
+    Create an Epic work item. Returns (work_item_id, work_item_url).
+    area_path: if empty, omitted from request and ADO uses project default.
+    """
     body = [
         {"op": "add", "path": "/fields/System.Title", "value": title},
         {"op": "add", "path": "/fields/System.Description", "value": description},
-        {"op": "add", "path": "/fields/System.AreaPath", "value": ADO_PROJECT},
     ]
+    if area_path:
+        body.append({"op": "add", "path": "/fields/System.AreaPath", "value": area_path})
+    if tags:
+        body.append({"op": "add", "path": "/fields/System.Tags", "value": tags})
     return _post_work_item("Epic", body)
 
 
@@ -61,10 +96,13 @@ def create_user_story(
     acceptance_criteria: list[str],
     story_points: int | None,
     parent_work_item_url: str,
+    area_path: str = "",
+    tags: str = "",
 ) -> tuple[int, str]:
     """
     Create a User Story work item linked as a child of the given epic.
     Returns (work_item_id, work_item_url).
+    area_path: if empty, omitted and ADO uses project default.
     """
     # ADO's AcceptanceCriteria field is HTML rich-text
     ac_html = "<ul>" + "".join(f"<li>{ac}</li>" for ac in acceptance_criteria) + "</ul>"
@@ -73,7 +111,6 @@ def create_user_story(
         {"op": "add", "path": "/fields/System.Title", "value": title},
         {"op": "add", "path": "/fields/System.Description", "value": description},
         {"op": "add", "path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria", "value": ac_html},
-        {"op": "add", "path": "/fields/System.AreaPath", "value": ADO_PROJECT},
         # Link to parent epic: Hierarchy-Reverse = child→parent direction
         {
             "op": "add",
@@ -86,6 +123,10 @@ def create_user_story(
         },
     ]
 
+    if area_path:
+        body.append({"op": "add", "path": "/fields/System.AreaPath", "value": area_path})
+    if tags:
+        body.append({"op": "add", "path": "/fields/System.Tags", "value": tags})
     if story_points is not None:
         body.append({
             "op": "add",

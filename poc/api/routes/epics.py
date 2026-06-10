@@ -2,7 +2,7 @@
 
 import asyncio
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from api.models import (
     AdoPushResponse,
@@ -120,7 +120,16 @@ def list_stories(project_id: str, epic_id: str):
 
 
 @router.post("/push-to-ado", response_model=AdoPushResponse)
-def push_to_ado(project_id: str):
+def push_to_ado(
+    project_id: str,
+    area_path: str = Query(
+        "",
+        description=(
+            "ADO sub-area for this project. StackForge will try to create it if it doesn't exist. "
+            "Leave empty to fall back to the ADO project default area."
+        ),
+    ),
+):
     """
     Push all generated epics and user stories to Azure DevOps.
     Requires ADO_ORG, ADO_PROJECT, ADO_PAT in poc/.env.
@@ -139,7 +148,7 @@ def push_to_ado(project_id: str):
 
     try:
         from pipeline.stage2_runner import push_to_ado as _push
-        return _push(project_id)
+        return _push(project_id, area_path=area_path)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

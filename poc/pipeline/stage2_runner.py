@@ -22,6 +22,29 @@ from db import DB
 from pipeline.epic_generator import generate_epics
 from pipeline.story_generator import generate_stories_for_all_epics
 
+_GLOBAL_CONSTRAINT_TOPICS = frozenset(
+    {"budget", "testing", "integrations", "team_and_process"}
+)
+
+
+def _extract_global_constraints(requirements: list[dict]) -> list[dict]:
+    """
+    Rule-based filter — zero LLM cost.
+
+    Returns requirements that are cross-cutting project-wide constraints:
+    - sdlc_topic in (budget, testing, integrations, team_and_process): these
+      topics are always project-wide, never feature-specific.
+    - req_type == 'constraint': explicitly typed as a constraint by Stage 1.
+
+    technical/design topics excluded — usually feature-specific and belong
+    in the epic they were grouped into.
+    """
+    return [
+        r for r in requirements
+        if r.get("sdlc_topic") in _GLOBAL_CONSTRAINT_TOPICS
+        or r.get("req_type") == "constraint"
+    ]
+
 
 def _text_array_literal(items: list[str]) -> str:
     """Convert a Python list to a PostgreSQL TEXT[] literal string for pg8000."""
@@ -43,6 +66,11 @@ async def run_stage2(project_id: str) -> dict:
     Raises ValueError if no requirements exist.
     """
     with DB() as db:
+        # Clear previous generation results so re-runs don't accumulate stale
+        # epics and stories. Stories must be deleted before epics (FK constraint).
+        db.execute("DELETE FROM user_stories WHERE project_id = %s", (project_id,))
+        db.execute("DELETE FROM epics WHERE project_id = %s", (project_id,))
+        db.execute("DELETE FROM stage2_metrics WHERE project_id = %s", (project_id,))
         db.execute(
             "UPDATE projects SET stage2_status = 'generating' WHERE id = %s",
             (project_id,),
@@ -69,6 +97,11 @@ async def run_stage2(project_id: str) -> dict:
             r["id"] = str(r["id"])
 
         requirements_by_id = {r["id"]: r for r in requirements}
+
+        # Rule-based filter — zero LLM cost. Extracts cross-cutting requirements
+        # (budget, testing, integrations, team_and_process topics + constraint type)
+        # to inject into every epic's story generation prompt.
+        global_constraints = _extract_global_constraints(requirements)
 
         # ── Step 1: Epic decomposition (cheap model, titles only) ────────────
         epics, epic_in_tok, epic_out_tok, epic_dur = await generate_epics(requirements)
@@ -105,7 +138,9 @@ async def run_stage2(project_id: str) -> dict:
                 epic_rows.append(epic)
 
         # ── Step 2: Story generation (mid model, per epic, parallel) ─────────
-        results = await generate_stories_for_all_epics(epic_rows, requirements_by_id)
+        results = await generate_stories_for_all_epics(
+            epic_rows, requirements_by_id, global_constraints
+        )
 
         total_stories = 0
         with DB() as db:
@@ -158,16 +193,20 @@ async def run_stage2(project_id: str) -> dict:
         raise
 
 
-def push_to_ado(project_id: str) -> dict:
+def push_to_ado(project_id: str, area_path: str = "") -> dict:
     """
     Push all epics and user stories to Azure DevOps.
+
+    Each StackForge project gets its own area path ({ADO_PROJECT}\\{project_name})
+    created automatically via the ADO Classifications API before items are pushed.
+    This keeps MediBook, CareFlow, etc. separated in the ADO board.
 
     This is a synchronous operation — it uses httpx.Client (sync) and runs
     sequentially: epics first, then their child stories.
     Returns {epics_pushed, stories_pushed, errors[]}.
     """
     from config import ADO_ORG, ADO_PAT, ADO_PROJECT
-    from pipeline.ado_client import create_epic, create_user_story
+    from pipeline.ado_client import create_epic, create_user_story, ensure_area_path
 
     if not all([ADO_ORG, ADO_PROJECT, ADO_PAT]):
         raise ValueError(
@@ -176,10 +215,34 @@ def push_to_ado(project_id: str) -> dict:
         )
 
     with DB() as db:
+        proj_row = db.fetch_one("SELECT name FROM projects WHERE id = %s", (project_id,))
         epics = db.fetch_all(
             "SELECT * FROM epics WHERE project_id = %s ORDER BY created_at",
             (project_id,),
         )
+
+    import logging as _log
+    _logger = _log.getLogger(__name__)
+
+    project_name = proj_row["name"] if proj_row else project_id
+
+    # area_path resolution:
+    # 1. If caller passed an explicit area_path (from UI text input), use it directly
+    #    and try to auto-create the node (idempotent).
+    # 2. If no area_path provided, derive from project name and try to create.
+    # 3. If creation fails either way, fall back to "" (omit AreaPath entirely —
+    #    avoids TF401347 when the sub-area doesn't exist in ADO).
+    if not area_path:
+        area_path = project_name
+    try:
+        area_path = ensure_area_path(area_path)
+    except Exception as e:
+        _logger.warning(
+            "Could not create ADO area path '%s' (%s) — items will use project default area",
+            area_path, e,
+        )
+        area_path = ""
+    tags = project_name
 
     epics_pushed = 0
     stories_pushed = 0
@@ -192,7 +255,9 @@ def push_to_ado(project_id: str) -> dict:
             if epic.get("ado_work_item_id"):
                 ado_epic_url = epic["ado_work_item_url"]
             else:
-                ado_epic_id, ado_epic_url = create_epic(epic["title"], epic["description"])
+                ado_epic_id, ado_epic_url = create_epic(
+                    epic["title"], epic["description"], area_path=area_path, tags=tags
+                )
                 with DB() as db:
                     db.execute(
                         "UPDATE epics SET ado_work_item_id = %s, ado_work_item_url = %s WHERE id = %s",
@@ -218,6 +283,8 @@ def push_to_ado(project_id: str) -> dict:
                         ac,
                         story.get("story_points"),
                         ado_epic_url,
+                        area_path=area_path,
+                        tags=tags,
                     )
                     with DB() as db:
                         db.execute(
