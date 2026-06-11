@@ -103,6 +103,25 @@ def list_epics(project_id: str):
     return result
 
 
+@router.get("/stories", response_model=list[StoryResponse])
+def list_all_stories(project_id: str):
+    """All stories for a project in one call — avoids N per-epic round trips in the UI."""
+    with DB() as db:
+        if not db.fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,)):
+            raise HTTPException(status_code=404, detail="Project not found")
+        stories = db.fetch_all(
+            "SELECT * FROM user_stories WHERE project_id = %s ORDER BY created_at",
+            (project_id,),
+        )
+    return [
+        {
+            **{k: (str(v) if k in ("id", "epic_id", "project_id") else v) for k, v in s.items()},
+            "acceptance_criteria": list(s.get("acceptance_criteria") or []),
+        }
+        for s in stories
+    ]
+
+
 @router.get("/epics/{epic_id}/stories", response_model=list[StoryResponse])
 def list_stories(project_id: str, epic_id: str):
     with DB() as db:

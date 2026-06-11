@@ -11,6 +11,7 @@ StackForge POC — Streamlit UI (redesigned for demos)
 
 import sys
 import os
+import time
 import json as _json
 from collections import Counter
 
@@ -465,25 +466,40 @@ def api_delete(path: str) -> bool:
         return False
 
 
-@st.cache_data(ttl=15, show_spinner=False)
+# ─── Scoped GET cache (replaces @st.cache_data — supports per-path invalidation) ─
+
+_cache_store: dict[str, tuple] = {}
+_CACHE_TTL = 15
+
+
 def cached_get(path: str) -> dict | list | None:
-    """
-    Cached GET — 15 s TTL, keyed on path.
-
-    Eliminates redundant round-trips during reruns: the full script re-executes
-    on every button click, and all tab data would be re-fetched from scratch
-    without this. ~11 API calls collapse to 0–1 cache misses per rerun.
-
-    Call  cached_get.clear()  after any POST/DELETE that changes this data,
-    before calling st.rerun(), so the next render sees fresh results.
-    """
+    """GET with 15s per-path TTL. Use invalidate_cache() after mutations."""
+    now = time.time()
+    if path in _cache_store:
+        val, ts = _cache_store[path]
+        if now - ts < _CACHE_TTL:
+            return val
     try:
-        # Use a fresh client here — cache_data can't serialize the httpx.Client
         r = httpx.get(f"{API_BASE}{path}", timeout=30)
         r.raise_for_status()
-        return r.json()
+        result = r.json()
+        _cache_store[path] = (result, now)
+        return result
     except Exception:
         return None
+
+
+def invalidate_cache(*paths: str) -> None:
+    """Invalidate specific cache paths after a mutating operation."""
+    for p in paths:
+        _cache_store.pop(p, None)
+
+
+def invalidate_project_cache(project_id: str) -> None:
+    """Invalidate all cached paths that reference a specific project."""
+    stale = [k for k in _cache_store if project_id in k]
+    for k in stale:
+        _cache_store.pop(k, None)
 
 
 def get_projects() -> list[dict]:
@@ -647,7 +663,7 @@ with tab_setup:
                         if st.button("Delete", key=f"btn_confirm_del_{pid_str}",
                                      type="primary", use_container_width=True):
                             if api_delete(f"/projects/{pid_str}"):
-                                cached_get.clear()
+                                invalidate_cache("/projects")
                                 del st.session_state[confirm_key]
                                 # If the deleted project was active, clear it
                                 if is_active:
@@ -695,7 +711,7 @@ with tab_setup:
             if client_name and project_name:
                 result = api_post("/projects", json={"client_name": client_name, "project_name": project_name})
                 if result:
-                    cached_get.clear()
+                    invalidate_cache("/projects")
                     st.session_state["project_id"] = str(result["id"])
                     st.session_state["project_name"] = result.get("name", project_name)
                     st.success(f"Created **{result.get('name', project_name)}** — now active.")
@@ -1229,7 +1245,10 @@ with tab_docs:
                                     json={"instruction": edit_instruction.strip()},
                                 )
                             if result:
-                                cached_get.clear()
+                                invalidate_cache(
+                                    f"/projects/{project_id}/docs/{selected_topic}",
+                                    f"/projects/{project_id}/docs",
+                                )
                                 st.success("Edit applied.")
                                 st.rerun()
                         else:
@@ -1250,7 +1269,7 @@ with tab_docs:
                     if st.button("🎨  Generate in Stitch", key="btn_stitch_generate", type="primary"):
                         result = api_post(f"/projects/{project_id}/stitch/generate")
                         if result:
-                            cached_get.clear()
+                            invalidate_cache(f"/projects/{project_id}/stitch")
                             st.info("Generating designs — click Refresh in a few seconds.")
                             st.rerun()
 
@@ -1263,7 +1282,7 @@ with tab_docs:
                         unsafe_allow_html=True,
                     )
                     if st.button("🔄  Refresh", key="btn_stitch_refresh"):
-                        cached_get.clear()
+                        invalidate_cache(f"/projects/{project_id}/stitch")
                         st.rerun()
 
                 elif stitch_status == "ready":
@@ -1297,7 +1316,7 @@ with tab_docs:
                     if st.button("🔄  Regenerate", key="btn_stitch_regen"):
                         result = api_post(f"/projects/{project_id}/stitch/generate")
                         if result:
-                            cached_get.clear()
+                            invalidate_cache(f"/projects/{project_id}/stitch")
                             st.info("Regenerating…")
                             st.rerun()
 
@@ -1308,7 +1327,7 @@ with tab_docs:
                     if st.button("🔄  Retry", key="btn_stitch_retry", type="primary"):
                         result = api_post(f"/projects/{project_id}/stitch/generate")
                         if result:
-                            cached_get.clear()
+                            invalidate_cache(f"/projects/{project_id}/stitch")
                             st.info("Retrying…")
                             st.rerun()
 
@@ -1369,7 +1388,10 @@ with tab_clarify:
                                 json={"answer": answer_text.strip()},
                             )
                             if result:
-                                cached_get.clear()
+                                invalidate_cache(
+                                    f"/projects/{project_id}/clarifications?status=open",
+                                    f"/projects/{project_id}/clarifications?status=answered",
+                                )
                                 st.success("Answer saved and added to the knowledge base.")
                                 st.rerun()
                         else:
@@ -1496,7 +1518,12 @@ with tab_epics:
                 if st.button("⚡  Generate Epics & Stories", key="btn_generate_epics", type="primary", use_container_width=True):
                     result = api_post(f"/projects/{project_id}/generate-epics")
                     if result:
-                        cached_get.clear()
+                        invalidate_cache(
+                            f"/projects/{project_id}/stage2-status",
+                            f"/projects/{project_id}/epics",
+                            f"/projects/{project_id}/stories",
+                            f"/projects/{project_id}/stage2-metrics",
+                        )
                         st.info("Generation started — this takes ~30 seconds. Refresh to check progress.")
                         st.rerun()
             elif s2_status == "generating":
@@ -1509,7 +1536,7 @@ with tab_epics:
                     unsafe_allow_html=True,
                 )
                 if st.button("🔄 Refresh", key="btn_s2_refresh"):
-                    cached_get.clear()
+                    invalidate_cache(f"/projects/{project_id}/stage2-status")
                     st.rerun()
             elif s2_status == "ready":
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1562,7 +1589,10 @@ with tab_epics:
                                 "stories_pushed": push_result.get("stories_pushed", 0),
                                 "errors": push_result.get("errors", []),
                             }
-                        cached_get.clear()
+                        invalidate_cache(
+                            f"/projects/{project_id}/stage2-status",
+                            f"/projects/{project_id}/epics",
+                        )
                         st.rerun()
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1593,6 +1623,12 @@ with tab_epics:
             if not epics_data:
                 st.info("No epics found. Try regenerating.")
             else:
+                # One call for all stories — avoids N per-epic round trips
+                _all_stories = cached_get(f"/projects/{project_id}/stories") or []
+                _stories_by_epic: dict[str, list] = {}
+                for _s in _all_stories:
+                    _stories_by_epic.setdefault(str(_s.get("epic_id", "")), []).append(_s)
+
                 for epic in epics_data:
                     epic_id = str(epic["id"])
                     ado_id = epic.get("ado_work_item_id")
@@ -1618,7 +1654,7 @@ with tab_epics:
                             unsafe_allow_html=True,
                         )
 
-                        stories_data = cached_get(f"/projects/{project_id}/epics/{epic_id}/stories") or []
+                        stories_data = _stories_by_epic.get(epic_id, [])
 
                         if not stories_data:
                             st.caption("No stories generated for this epic.")
