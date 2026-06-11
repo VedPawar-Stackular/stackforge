@@ -19,7 +19,8 @@ import re
 from openai import RateLimitError
 
 from config import MODEL_CHEAP
-from pipeline.llm_utils import get_llm_client
+from pipeline.llm_utils import extract_usage, get_llm_client
+from pipeline.metrics_common import UsageTotals
 
 _client = get_llm_client()
 _logger = logging.getLogger(__name__)
@@ -65,8 +66,12 @@ async def _summarize_with_retry(
     semaphore: asyncio.Semaphore,
     mode: str = "spec",
     retries: int = 6,
-) -> str:
-    """Call the cheap model with exponential backoff on rate-limit errors."""
+) -> tuple[str, int, int, int]:
+    """Call the cheap model with exponential backoff on rate-limit errors.
+
+    Returns (summary_text, input_tokens, output_tokens, thinking_tokens) so the
+    caller can aggregate token usage for the metrics report.
+    """
     if mode == "transcript":
         system_prompt = _TRANSCRIPT_SYSTEM_PROMPT
         max_tokens = 300
@@ -86,17 +91,20 @@ async def _summarize_with_retry(
                         {"role": "user", "content": raw_text},
                     ],
                 )
+            in_tok, out_tok, think_tok = extract_usage(response)
             data = json.loads(response.choices[0].message.content)
 
             if mode == "spec":
                 key_points = data.get("key_points", [])
-                return "; ".join(key_points) if key_points else ""
+                text = "; ".join(key_points) if key_points else ""
             else:
                 summary = data.get("summary", "")
                 key_points = data.get("key_points", [])
                 if key_points:
-                    return f"{summary} Key points: {'; '.join(key_points)}"
-                return summary
+                    text = f"{summary} Key points: {'; '.join(key_points)}"
+                else:
+                    text = summary
+            return text, in_tok, out_tok, think_tok
 
         except RateLimitError:
             if attempt == retries - 1:
@@ -113,13 +121,23 @@ async def _summarize_with_retry(
 _semaphore = asyncio.Semaphore(5)
 
 
-async def summarize_all(chunks: list[str], doc_name: str = "") -> list[str]:
+async def summarize_all(chunks: list[str], doc_name: str = "") -> tuple[list[str], UsageTotals]:
     """Summarise all chunks with rate-limit-safe concurrency.
 
     doc_name is used to detect whether this is a spec document (FRS/SOW)
     or a transcript/meeting note, selecting the appropriate extraction mode.
+
+    Returns (summaries, usage) where usage aggregates token counts across every
+    chunk call — one call per chunk — for the Stage 1 metrics report.
     """
     mode = _detect_doc_mode(doc_name)
     _logger.info("Summarizer mode: %s (doc: %s)", mode, doc_name or "<unknown>")
     tasks = [_summarize_with_retry(c, _semaphore, mode=mode) for c in chunks]
-    return await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks)
+
+    summaries: list[str] = []
+    usage = UsageTotals()
+    for text, in_tok, out_tok, think_tok in results:
+        summaries.append(text)
+        usage = usage.add(in_tok, out_tok, think_tok)
+    return summaries, usage

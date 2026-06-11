@@ -13,10 +13,12 @@ Steps:
 import hashlib
 import logging
 import os
+import time
 import uuid
 
 from rank_bm25 import BM25Okapi
 
+from config import MODEL_CAPABLE, MODEL_CHEAP
 from db import DB
 from pipeline.chunker import chunk
 from pipeline.clarifier import generate_clarifications
@@ -24,6 +26,7 @@ from pipeline.doc_writer import write_sdlc_docs
 from pipeline.embedder import embed_chunk_summaries, embed_requirements
 from pipeline.extractor import extract_requirements
 from pipeline.parser import parse
+from pipeline.stage1_metrics_calculator import record_step
 from pipeline.summarizer import summarize_all
 from pipeline.utils import get_project_name, text_array_literal
 
@@ -96,7 +99,12 @@ async def ingest_document(
         chunks = chunk(text)
 
         # ── Step 3: Summarize (parallel cheap model calls) ───────────────────
-        summaries = await summarize_all(chunks, doc_name=filename)
+        _t0 = time.perf_counter()
+        summaries, summ_usage = await summarize_all(chunks, doc_name=filename)
+        record_step(
+            project_id, "summarization", MODEL_CHEAP, summ_usage,
+            int((time.perf_counter() - _t0) * 1000),
+        )
 
         # ── Store chunks + summaries in DB ───────────────────────────────────
         chunk_rows = []
@@ -119,7 +127,12 @@ async def ingest_document(
                 })
 
         # ── Step 4: Extract requirements from all summaries ──────────────────
-        reqs = await extract_requirements(summaries, [doc_id])
+        _t0 = time.perf_counter()
+        reqs, extr_usage = await extract_requirements(summaries, [doc_id])
+        record_step(
+            project_id, "extraction", MODEL_CAPABLE, extr_usage,
+            int((time.perf_counter() - _t0) * 1000),
+        )
 
         req_rows = []
         with DB() as db:
@@ -155,7 +168,12 @@ async def ingest_document(
 
         # ── Step 6: Generate clarification questions ──────────────────────────
         all_reqs = _fetch_all_requirements(project_id)
-        clarifications = await generate_clarifications(all_reqs)
+        _t0 = time.perf_counter()
+        clarifications, clar_usage = await generate_clarifications(all_reqs)
+        record_step(
+            project_id, "clarification", MODEL_CHEAP, clar_usage,
+            int((time.perf_counter() - _t0) * 1000),
+        )
 
         with DB() as db:
             # Clear stale open clarifications before inserting fresh set

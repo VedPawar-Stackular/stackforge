@@ -34,7 +34,7 @@ import time
 from openai import RateLimitError
 
 from config import MODEL_CHEAP
-from pipeline.llm_utils import get_llm_client
+from pipeline.llm_utils import extract_usage, get_llm_client
 
 _client = get_llm_client()
 _logger = logging.getLogger(__name__)
@@ -65,8 +65,8 @@ Rules:
 
 async def _call_with_retry(
     prompt: str, semaphore: asyncio.Semaphore, retries: int = 4
-) -> tuple[str, int, int, int]:
-    """Returns (content, input_tokens, output_tokens, duration_ms)."""
+) -> tuple[str, int, int, int, int]:
+    """Returns (content, input_tokens, output_tokens, thinking_tokens, duration_ms)."""
     for attempt in range(retries):
         try:
             async with semaphore:
@@ -82,11 +82,12 @@ async def _call_with_retry(
                 )
                 duration_ms = int((time.monotonic() - t0) * 1000)
 
-            usage = response.usage
+            in_tok, out_tok, think_tok = extract_usage(response)
             return (
                 response.choices[0].message.content,
-                usage.prompt_tokens,
-                usage.completion_tokens,
+                in_tok,
+                out_tok,
+                think_tok,
                 duration_ms,
             )
 
@@ -96,12 +97,12 @@ async def _call_with_retry(
             wait = (2 ** attempt) + random.uniform(0, 1)
             await asyncio.sleep(wait)
 
-    return "{}", 0, 0, 0
+    return "{}", 0, 0, 0, 0
 
 
 async def generate_epics(
     requirements: list[dict],
-) -> tuple[list[dict], int, int, int]:
+) -> tuple[list[dict], int, int, int, int]:
     """
     Decompose requirements into epics using the cheap model.
 
@@ -109,7 +110,7 @@ async def generate_epics(
     Full descriptions are intentionally excluded — theme grouping does not
     need them, and excluding them saves ~77% of input tokens.
 
-    Returns (epics, input_tokens, output_tokens, duration_ms).
+    Returns (epics, input_tokens, output_tokens, thinking_tokens, duration_ms).
     """
     # Semaphore created here so it belongs to the current event loop
     semaphore = asyncio.Semaphore(5)
@@ -127,7 +128,7 @@ async def generate_epics(
     ]
     prompt = "Requirements to group into epics:\n" + "\n".join(req_lines)
 
-    content, in_tok, out_tok, dur_ms = await _call_with_retry(prompt, semaphore)
+    content, in_tok, out_tok, think_tok, dur_ms = await _call_with_retry(prompt, semaphore)
 
     try:
         parsed = json.loads(content)
@@ -175,4 +176,4 @@ async def generate_epics(
         epic.setdefault("title", "Untitled Epic")
         epic.setdefault("description", "")
 
-    return epics, in_tok, out_tok, dur_ms
+    return epics, in_tok, out_tok, think_tok, dur_ms

@@ -41,7 +41,7 @@ import time
 from openai import RateLimitError
 
 from config import MODEL_CAPABLE
-from pipeline.llm_utils import get_llm_client
+from pipeline.llm_utils import extract_usage, get_llm_client
 
 _client = get_llm_client()
 
@@ -144,7 +144,7 @@ async def _generate_for_epic(
     global_constraints: list[dict],
     clarification_answers: list[dict],
     retries: int = 4,
-) -> tuple[list[dict], int, int, int]:
+) -> tuple[list[dict], int, int, int, int]:
     """
     Generate user stories for one epic.
 
@@ -237,7 +237,7 @@ async def _generate_for_epic(
                 )
                 duration_ms = int((time.monotonic() - t0) * 1000)
 
-            usage = response.usage
+            in_tok, out_tok, think_tok = extract_usage(response)
             content = response.choices[0].message.content
             try:
                 parsed = json.loads(content)
@@ -258,7 +258,7 @@ async def _generate_for_epic(
                 s.setdefault("story_points", None)
                 s.setdefault("assignee", None)
 
-            return stories, usage.prompt_tokens, usage.completion_tokens, duration_ms
+            return stories, in_tok, out_tok, think_tok, duration_ms
 
         except RateLimitError:
             if attempt == retries - 1:
@@ -266,7 +266,7 @@ async def _generate_for_epic(
             wait = (2 ** attempt) + random.uniform(0, 1)
             await asyncio.sleep(wait)
 
-    return [], 0, 0, 0
+    return [], 0, 0, 0, 0
 
 
 async def generate_stories_for_all_epics(
@@ -274,7 +274,7 @@ async def generate_stories_for_all_epics(
     requirements_by_id: dict[str, dict],
     global_constraints: list[dict] | None = None,
     clarification_answers: list[dict] | None = None,
-) -> list[tuple[dict, list[dict], int, int, int]]:
+) -> list[tuple[dict, list[dict], int, int, int, int]]:
     """
     Generate stories for all epics in parallel.
 
@@ -289,7 +289,7 @@ async def generate_stories_for_all_epics(
     epic's prompt as definitive confirmation of requirements. Pass an empty
     list (or None) to skip injection.
 
-    Returns list of (epic, stories, input_tokens, output_tokens, duration_ms).
+    Returns list of (epic, stories, input_tokens, output_tokens, thinking_tokens, duration_ms).
     """
     constraints = global_constraints or []
     answers = clarification_answers or []
@@ -305,6 +305,6 @@ async def generate_stories_for_all_epics(
     results = await asyncio.gather(*tasks)
 
     return [
-        (epic, stories, in_tok, out_tok, dur)
-        for epic, (stories, in_tok, out_tok, dur) in zip(epics, results)
+        (epic, stories, in_tok, out_tok, think_tok, dur)
+        for epic, (stories, in_tok, out_tok, think_tok, dur) in zip(epics, results)
     ]

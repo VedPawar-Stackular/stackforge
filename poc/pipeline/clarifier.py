@@ -13,7 +13,8 @@ import random
 from openai import RateLimitError
 
 from config import MODEL_CHEAP
-from pipeline.llm_utils import get_llm_client
+from pipeline.llm_utils import extract_usage, get_llm_client
+from pipeline.metrics_common import UsageTotals
 
 _logger = logging.getLogger(__name__)
 
@@ -34,10 +35,13 @@ _SYSTEM_PROMPT = (
 )
 
 
-async def generate_clarifications(requirements: list[dict], retries: int = 4) -> list[dict]:
+async def generate_clarifications(
+    requirements: list[dict], retries: int = 4
+) -> tuple[list[dict], UsageTotals]:
     """
-    Takes a list of requirement dicts, returns list of clarification question dicts.
+    Takes a list of requirement dicts, returns (clarification dicts, usage).
     requirements: list of {req_type, title, description, confidence}
+    usage carries the single call's token counts for the Stage 1 metrics report.
     """
     req_text = "\n".join(
         f"[{r['req_type'].upper()}] {r['title']}: {r['description']}"
@@ -57,6 +61,8 @@ async def generate_clarifications(requirements: list[dict], retries: int = 4) ->
                     },
                 ],
             )
+            in_tok, out_tok, think_tok = extract_usage(response)
+            usage = UsageTotals().add(in_tok, out_tok, think_tok)
             try:
                 data = json.loads(response.choices[0].message.content)
             except json.JSONDecodeError:
@@ -70,10 +76,10 @@ async def generate_clarifications(requirements: list[dict], retries: int = 4) ->
                         c.get("priority"),
                     )
                     c["priority"] = "medium"
-            return clarifications
+            return clarifications, usage
         except RateLimitError:
             if attempt == retries - 1:
                 raise
             wait = (2 ** attempt) + random.uniform(0, 1)
             await asyncio.sleep(wait)
-    return []
+    return [], UsageTotals()

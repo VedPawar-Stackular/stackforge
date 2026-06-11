@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS stage2_metrics (
     model          TEXT        NOT NULL,
     input_tokens   INTEGER     NOT NULL,
     output_tokens  INTEGER     NOT NULL,
+    thinking_tokens INTEGER    NOT NULL DEFAULT 0,
     duration_ms    INTEGER     NOT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

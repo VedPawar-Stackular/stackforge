@@ -1,0 +1,90 @@
+FROM:    Rajan Mehta <rajan.mehta@apexhealthgroup.in>
+TO:      Meghana Rao <meghana.rao@stackular.ai>
+CC:      Dr. Priya Nair <priya.nair@apexhealthgroup.in>;
+         Suresh Kumar <suresh.kumar@apexhealthgroup.in>
+DATE:    12 January 2026, 11:34 AM IST
+SUBJECT: Re: MediBook BRD v1.0 — Review Comments and Additional Items
+
+─────────────────────────────────────────────────────────
+Hi Meghana,
+
+Thank you for sharing the BRD (AHG-BRD-2026-01 v1.0). Dr. Nair, Suresh, and I
+reviewed it over the weekend and it captures the discussion well. A few points below:
+
+
+1. LANGUAGES [Closes OQ-03]
+   Confirmed: English and Telugu are the required languages for the initial launch.
+   Please update the BRD accordingly and close OQ-03.
+
+
+2. PAYMENT GATEWAY [Closes OQ-01]
+   We confirm Razorpay as the payment gateway. Suresh will share the Razorpay merchant
+   account API credentials separately within this week. You can close OQ-01.
+
+
+3. PERFORMANCE SLA [Relates to OQ-06]
+   We noticed the NFR table says "load quickly" which is vague. Based on what Dr. Nair
+   said in the call, we would specifically want:
+     - Doctor dashboard and appointment list: page load under 3 seconds
+     - Patient portal (booking, record view): under 4 seconds
+   Can you confirm this is achievable and include it formally in the NFR section?
+
+
+4. MOBILE APP — NATIVE APP CONFIRMED
+   We discussed internally and we want a native mobile app that patients can download
+   from the Google Play Store and Apple App Store. Not a web app. Both Android and iOS
+   are required. Please update the BRD to reflect this.
+
+
+5. WHATSAPP API [Relates to OQ-04]
+   Suresh is still in discussion with our telecom provider. He expects to have an
+   answer by 20 January. In the meantime, can Stackular proceed with SMS-only
+   notifications first and add WhatsApp once the API access is confirmed? We don't
+   want this to hold up the project.
+
+
+6. NEW REQUIREMENT — PATIENT REFERRAL TRACKING
+   Dr. Nair and I had a further discussion after the call and she would like to include
+   a basic patient referral tracking feature in this version (not future). When a
+   doctor at one of our clinics refers a patient to an outside specialist or hospital,
+   the system should record the referral:
+     - Referring doctor
+     - Patient
+     - Referred-to specialist or hospital name
+     - Date of referral
+     - Reason / notes
+     - Status (pending / seen / no-show)
+   This doesn't need to be complex. It's mainly a log that the clinic manager can
+   view and export. Can you advise whether this can be added to the current scope and
+   if it affects the timeline or budget?
+
+
+7. OFFLINE MODE FOR MOBILE APP
+   One of our senior doctors asked whether the mobile app will work without an internet
+   connection. Specifically, he wants to be able to view his appointment list for the
+   day even if the clinic Wi-Fi is down. Is offline access feasible for at least the
+   daily appointment schedule? What would the trade-offs be?
+
+
+Please revert on items 6 and 7 as they could affect the scope and the SOW.
+We'd like to finalise and sign the SOW before the end of this week.
+
+Also — Suresh will send over a sample Medi-Plus CSV export file tomorrow. He says it
+includes patient demographics and visit summaries but not the full clinical notes,
+which are in a separate proprietary format. Please assess what's available and let
+us know if there are any gaps.
+
+Best regards,
+Rajan Mehta
+Operations Manager, Apex Health Group Pvt. Ltd.
++91 98491 22345 | rajan.mehta@apexhealthgroup.in
+
+─────────────────────────────────────────────────────────
+APEX HEALTH GROUP PVT. LTD.
+Ground Floor, Apex Towers, Banjara Hills Road No. 12
+Hyderabad – 500 034, Telangana
+www.apexhealthgroup.in
+─────────────────────────────────────────────────────────
+CONFIDENTIALITY NOTICE: This email and any attachments are intended solely for the
+named recipient(s) and may contain confidential and commercially sensitive information.
+If you have received this email in error, please notify the sender and delete it.

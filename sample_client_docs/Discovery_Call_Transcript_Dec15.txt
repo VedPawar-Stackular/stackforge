@@ -1,0 +1,148 @@
+MEDIBOOK PROJECT — DISCOVERY CALL TRANSCRIPT
+============================================================
+Date:      15 December 2025
+Time:      3:00 PM – 3:51 PM IST
+Platform:  Zoom (auto-transcribed, lightly edited for clarity)
+
+Attendees
+  Stackular Technologies:  Arjun Kapoor (Director), Meghana Rao (Business Analyst)
+  Apex Health Group:       Dr. Priya Nair (CEO), Rajan Mehta (Operations Manager)
+============================================================
+
+
+[00:00:28] ARJUN KAPOOR:
+Thank you for making the time. Before we get into requirements, it really helps us to
+understand how things work today. Could you walk us through a typical day — how
+appointments get booked, how records are accessed, that kind of thing?
+
+[00:01:12] DR. PRIYA NAIR:
+Sure, and I'll be honest — it's quite fragmented right now. The front desk starts
+taking calls from 8am and books appointments into an Excel sheet. That then gets
+manually entered into our EMR, which is Medi-Plus. We also have Practo running on the
+website for online bookings. But we get duplicate entries all the time when someone
+books on Practo and also calls in. It's causing a lot of confusion for reception.
+
+[00:02:30] RAJAN MEHTA:
+And the EMR is desktop-only. Doctors can only access patient records from a PC inside
+the clinic. So if Dr. Rao is seeing a patient at our Madhapur branch who normally comes
+to Banjara Hills, he can't see their history. He has to call us and we read it out to
+him. It's embarrassing, honestly.
+
+[00:03:18] MEGHANA RAO:
+That's a clear problem. So unified booking and remote record access are the two core
+asks. What about billing — how does that work currently?
+
+[00:04:02] RAJAN MEHTA:
+Billing is all in Tally. After a visit, the receptionist manually creates an invoice in
+Tally and takes cash or card. Errors happen — sometimes patients get charged the wrong
+amount. And there's no way for patients to see their invoices or pay online. We want
+the system to auto-generate invoices and allow patients to pay from their phone.
+We already use Razorpay on our main website, so that would be preferred.
+
+[00:05:20] ARJUN KAPOOR:
+Good to note. And for the patient-facing side — is this primarily a web experience or
+is a mobile app important?
+
+[00:06:05] DR. PRIYA NAIR:
+Mobile, definitely. Most of our patients are on mobile phones. Whether it's a proper
+downloadable app or a very good mobile website — I don't know enough to say, you'd
+advise us. But it needs to work well on a phone. And WhatsApp is very important.
+That's how people communicate here. Reminders must come on WhatsApp. SMS alone is
+not enough.
+
+[00:07:45] MEGHANA RAO:
+We've noted that. One thing to flag early — WhatsApp Business API requires a registered
+business account with Meta and approved message templates. Does Apex Health already
+have a WhatsApp Business API account set up, or is this something we'd need to arrange?
+
+[00:08:22] RAJAN MEHTA:
+We have a WhatsApp number that reception uses to send messages manually. Is that the
+same thing? I honestly don't know. Our IT head Suresh would know. We'll check.
+
+[00:09:10] ARJUN KAPOOR:
+Worth confirming. It's different from a personal or regular WhatsApp Business app —
+it's a separate API access level. Suresh would need to verify. Now, data migration —
+you have existing records in Medi-Plus. Do you have a rough sense of how many
+patient records we're talking about?
+
+[00:10:00] RAJAN MEHTA:
+Roughly 40,000 patients across the five branches. Some records go back 8 to 10 years.
+We'd want all of them accessible in the new system. The format — Suresh would know
+better, but I believe Medi-Plus can export to CSV. He'll get you a sample file.
+
+[00:11:30] DR. PRIYA NAIR:
+I also want to add — we've been looking at Practo as a benchmark. Something similar
+in terms of the patient experience, but fully customised for us. Our brand, our
+workflows. We don't want it to look like Practo.
+
+And the system absolutely must be fast. This is very important to me. When a doctor
+is sitting with a patient, they cannot be waiting 30 seconds for a page to load. That
+would be worse than the current situation. Speed is non-negotiable.
+
+[00:13:05] MEGHANA RAO:
+Understood. Can you give us a rough sense of peak concurrent usage? How many doctors
+and staff would be using the system simultaneously during busy hours?
+
+[00:13:48] DR. PRIYA NAIR:
+At peak, across all five clinics in the morning — maybe 15 doctors active, 10
+receptionists. And patients booking online — hard to say exactly. We do about 200 to
+300 appointments a day across all branches combined.
+
+[00:14:55] RAJAN MEHTA:
+Admin reporting is also important. I need to be able to pull a report on how many
+appointments each doctor had, revenue per clinic, outstanding payments — on a weekly
+basis, maybe daily too. At the moment I'm compiling this manually from Tally and
+it takes hours.
+
+[00:16:20] ARJUN KAPOOR:
+We'll include that in the admin panel requirements. What about languages — is English
+sufficient for all your patients?
+
+[00:17:10] DR. PRIYA NAIR:
+Telugu would be very important. A significant portion of our patients are more
+comfortable in Telugu, especially for the patient portal. English and Telugu together
+should be sufficient for launch.
+
+[00:18:30] MEGHANA RAO:
+Noted. Looking further ahead — are there any features you're considering for a future
+version that we should keep in mind for architecture?
+
+[00:19:15] DR. PRIYA NAIR:
+Video consultations. Post-COVID, some patients ask about it. We're not ready to invest
+in it now, but we'd want the platform to be able to support it in the future without
+starting from scratch. Can you keep that in mind?
+
+[00:20:40] ARJUN KAPOOR:
+Absolutely — we'll flag it as a future-ready architectural consideration.
+
+[00:21:05] RAJAN MEHTA:
+One more thing — and this is not for this version, just something we're thinking about.
+We have referral arrangements with a few specialist hospitals. Our GPs refer patients
+there for advanced treatment. At some point we'd want to track those referrals in the
+system — which patient, which doctor, referred where, and what the outcome was. Not for
+v1, but worth knowing about.
+
+[00:22:30] ARJUN KAPOOR:
+Noted — we'll capture that as a future requirement so it's on record. Let us now
+summarise what we've heard today. We'll have a draft BRD with you by 10 January.
+
+[00:23:00] DR. PRIYA NAIR:
+That works. Please make sure to include the speed and the WhatsApp requirements
+prominently. Those are the two things my doctors and patients keep asking about.
+
+[00:23:40] ARJUN KAPOOR:
+Absolutely. Thank you both, and we'll be in touch.
+
+============================================================
+POST-CALL ACTION ITEMS
+
+  [ ] Stackular: Prepare and share draft BRD by 10 January 2026
+  [ ] Apex IT (Suresh Kumar): Confirm WhatsApp Business API status and phone number
+  [ ] Apex IT (Suresh Kumar): Provide Medi-Plus sample CSV export for migration assessment
+  [ ] Apex Ops (Rajan Mehta): Define specific report requirements for admin panel
+  [ ] Apex Ops (Rajan Mehta): Formal written confirmation of Razorpay as payment gateway
+  [ ] Both: Align on native app vs PWA decision (Vendor to recommend in BRD)
+
+============================================================
+END OF TRANSCRIPT
+Auto-generated by Zoom AI. Please flag transcription errors to meghana.rao@stackular.ai

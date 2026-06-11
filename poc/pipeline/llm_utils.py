@@ -20,6 +20,25 @@ def get_llm_client() -> AsyncOpenAI:
     return AsyncOpenAI(base_url=LLM_BASE_URL, api_key=GROQ_API_KEY)
 
 
+def extract_usage(response: Any) -> tuple[int, int, int]:
+    """Return (input_tokens, output_tokens, thinking_tokens) from a chat response.
+
+    Defensive by design — every field is read via getattr with a zero default so a
+    provider that omits `.usage` (or omits a field) never aborts a generation step
+    over telemetry. `thinking_tokens` comes from `completion_tokens_details.
+    reasoning_tokens`, which reasoning models populate and the current Groq llama
+    models leave absent (→ 0). It auto-populates if a reasoning model is wired later.
+    """
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0, 0, 0
+    details = getattr(usage, "completion_tokens_details", None)
+    thinking = getattr(details, "reasoning_tokens", 0) or 0
+    input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+    output_tokens = getattr(usage, "completion_tokens", 0) or 0
+    return input_tokens, output_tokens, thinking
+
+
 async def call_with_retry(
     client: AsyncOpenAI,
     model: str,

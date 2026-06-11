@@ -149,7 +149,11 @@ class MetricsStep(BaseModel):
     tier: str
     input_tokens: int
     output_tokens: int
+    thinking_tokens: int = 0
     cost_usd: float
+    # Same tokens repriced at Opus rates — the per-step model-choice cost delta.
+    opus_equivalent_cost_usd: float = 0.0
+    opus_multiplier: float = 0.0
     duration_ms: int
     why_this_model: str
 
@@ -161,6 +165,21 @@ class Stage2MetricsResponse(BaseModel):
     tokens_saved: int
     actual_input_tokens: int
     actual_output_tokens: int
+    actual_thinking_tokens: int = 0
+    naive_input_tokens: int
+    naive_output_tokens: int
+    steps: list[MetricsStep]
+
+
+class Stage1MetricsResponse(BaseModel):
+    """Token-cost report for the Stage 1 ingestion pipeline (same shape as Stage 2)."""
+    actual_cost_usd: float
+    naive_cost_usd: float
+    savings_pct: float
+    tokens_saved: int
+    actual_input_tokens: int
+    actual_output_tokens: int
+    actual_thinking_tokens: int = 0
     naive_input_tokens: int
     naive_output_tokens: int
     steps: list[MetricsStep]

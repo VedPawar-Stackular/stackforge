@@ -14,15 +14,19 @@ Every delta between actual and naive maps to a named optimization decision.
 This report is the evidence shown to the lead engineer.
 """
 
-from config import MODEL_CAPABLE, MODEL_CHEAP, MODEL_TIER, PRICING
 from db import DB
+from pipeline.metrics_common import (
+    PROSE_OUTPUT_MULTIPLIER,
+    opus_multiplier,
+    opus_reprice,
+    step_cost,
+    tier_for_model,
+)
 
 # Average tokens per requirement when full descriptions are included
 _TOKENS_PER_REQ_FULL = 100
 # Naive baseline: a single system prompt + all requirements in one call
 _NAIVE_SYSTEM_PROMPT_TOKENS = 1500
-# Free-form prose is ~40% longer than structured JSON output
-_PROSE_OUTPUT_MULTIPLIER = 1.4
 # Approximate output tokens per story in structured JSON format
 _TOKENS_PER_STORY_JSON = 80
 
@@ -42,15 +46,6 @@ _WHY_MODEL = {
 }
 
 
-def _tier_for_model(model_name: str) -> str:
-    return MODEL_TIER.get(model_name, "sonnet")
-
-
-def _step_cost(input_tokens: int, output_tokens: int, tier: str) -> float:
-    p = PRICING[tier]
-    return (input_tokens / 1_000_000) * p["input"] + (output_tokens / 1_000_000) * p["output"]
-
-
 def _naive_baseline(total_requirements: int, total_stories: int) -> dict:
     """
     Calculate what a naive, unoptimized approach would cost.
@@ -61,12 +56,10 @@ def _naive_baseline(total_requirements: int, total_stories: int) -> dict:
     - Output is free-form prose (~40% more tokens than structured JSON)
     - No parallelism benefit (single sequential call)
     """
-    opus = PRICING["opus"]
-
     naive_input = _NAIVE_SYSTEM_PROMPT_TOKENS + total_requirements * _TOKENS_PER_REQ_FULL
-    naive_output = int(total_stories * _TOKENS_PER_STORY_JSON * _PROSE_OUTPUT_MULTIPLIER)
+    naive_output = int(total_stories * _TOKENS_PER_STORY_JSON * PROSE_OUTPUT_MULTIPLIER)
 
-    cost = (naive_input / 1_000_000) * opus["input"] + (naive_output / 1_000_000) * opus["output"]
+    cost = opus_reprice(naive_input, naive_output)
     return {
         "input_tokens": naive_input,
         "output_tokens": naive_output,
@@ -98,11 +91,14 @@ def get_metrics_report(project_id: str) -> dict:
     steps = []
     actual_input_total = 0
     actual_output_total = 0
+    actual_thinking_total = 0
     actual_cost_total = 0.0
 
     for row in metric_rows:
-        tier = _tier_for_model(row["model"])
-        cost = _step_cost(row["input_tokens"], row["output_tokens"], tier)
+        tier = tier_for_model(row["model"])
+        cost = step_cost(row["input_tokens"], row["output_tokens"], tier)
+        opus_cost = opus_reprice(row["input_tokens"], row["output_tokens"])
+        thinking = row.get("thinking_tokens", 0) or 0
 
         is_decomp = row["step"] == "epic_decomposition"
         why = _WHY_MODEL["epic_decomposition"] if is_decomp else _WHY_MODEL["story_generation"]
@@ -113,13 +109,17 @@ def get_metrics_report(project_id: str) -> dict:
             "tier": tier,
             "input_tokens": row["input_tokens"],
             "output_tokens": row["output_tokens"],
+            "thinking_tokens": thinking,
             "cost_usd": round(cost, 6),
+            "opus_equivalent_cost_usd": round(opus_cost, 6),
+            "opus_multiplier": opus_multiplier(cost, opus_cost),
             "duration_ms": row["duration_ms"],
             "why_this_model": why,
         })
 
         actual_input_total += row["input_tokens"]
         actual_output_total += row["output_tokens"]
+        actual_thinking_total += thinking
         actual_cost_total += cost
 
     naive = _naive_baseline(total_reqs, total_stories)
@@ -141,6 +141,7 @@ def get_metrics_report(project_id: str) -> dict:
         "tokens_saved": tokens_saved,
         "actual_input_tokens": actual_input_total,
         "actual_output_tokens": actual_output_total,
+        "actual_thinking_tokens": actual_thinking_total,
         "naive_input_tokens": naive["input_tokens"],
         "naive_output_tokens": naive["output_tokens"],
         "steps": steps,

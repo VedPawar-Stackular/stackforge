@@ -113,9 +113,12 @@ async def run_stage2(project_id: str) -> dict:
             )
 
         # ── Step 1: Epic decomposition (cheap model, titles only) ────────────
-        epics, epic_in_tok, epic_out_tok, epic_dur = await generate_epics(requirements)
+        epics, epic_in_tok, epic_out_tok, epic_think_tok, epic_dur = await generate_epics(requirements)
 
-        _log_metrics(project_id, "epic_decomposition", epic_in_tok, epic_out_tok, epic_dur)
+        _log_metrics(
+            project_id, "epic_decomposition",
+            epic_in_tok, epic_out_tok, epic_think_tok, epic_dur,
+        )
 
         if not epics:
             raise ValueError("Epic generation returned empty results — check Groq API key")
@@ -156,13 +159,14 @@ async def run_stage2(project_id: str) -> dict:
 
         total_stories = 0
         with DB() as db:
-            for i, (epic, stories, story_in_tok, story_out_tok, story_dur) in enumerate(results):
+            for i, (epic, stories, story_in_tok, story_out_tok, story_think_tok, story_dur) in enumerate(results):
                 if story_dur > 0:
                     _log_metrics(
                         project_id,
                         f"story_generation_epic_{i + 1}",
                         story_in_tok,
                         story_out_tok,
+                        story_think_tok,
                         story_dur,
                     )
                 for story in stories:
@@ -316,6 +320,7 @@ def _log_metrics(
     step: str,
     input_tokens: int,
     output_tokens: int,
+    thinking_tokens: int,
     duration_ms: int,
 ) -> None:
     model = MODEL_CHEAP if step == "epic_decomposition" else MODEL_CAPABLE
@@ -323,8 +328,9 @@ def _log_metrics(
         db.execute(
             """
             INSERT INTO stage2_metrics
-                (id, project_id, step, model, input_tokens, output_tokens, duration_ms)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (id, project_id, step, model, input_tokens, output_tokens,
+                 thinking_tokens, duration_ms)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 str(uuid.uuid4()),
@@ -333,6 +339,7 @@ def _log_metrics(
                 model,
                 input_tokens,
                 output_tokens,
+                thinking_tokens,
                 duration_ms,
             ),
         )

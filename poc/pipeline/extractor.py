@@ -18,7 +18,8 @@ import random
 from openai import RateLimitError
 
 from config import EXTRACTOR_BATCH_SIZE, MODEL_CAPABLE, SDLC_TOPICS
-from pipeline.llm_utils import get_llm_client
+from pipeline.llm_utils import extract_usage, get_llm_client
+from pipeline.metrics_common import UsageTotals
 
 _client = get_llm_client()
 _logger = logging.getLogger(__name__)
@@ -70,8 +71,12 @@ async def _extract_batch(
     batch_summaries: list[str],
     batch_index: int,
     retries: int = 4,
-) -> list[dict]:
-    """Extract requirements from a single batch of summaries."""
+) -> tuple[list[dict], int, int, int]:
+    """Extract requirements from a single batch of summaries.
+
+    Returns (requirements, input_tokens, output_tokens, thinking_tokens). Token
+    counts are captured even when JSON parsing fails — the call still cost tokens.
+    """
     combined = "\n\n---\n\n".join(batch_summaries)
     for attempt in range(retries):
         try:
@@ -87,6 +92,7 @@ async def _extract_batch(
                     },
                 ],
             )
+            in_tok, out_tok, think_tok = extract_usage(response)
             try:
                 data = json.loads(response.choices[0].message.content)
             except json.JSONDecodeError as exc:
@@ -97,24 +103,27 @@ async def _extract_batch(
                     exc,
                     raw_snippet,
                 )
-                return []
-            return data.get("requirements", [])
+                return [], in_tok, out_tok, think_tok
+            return data.get("requirements", []), in_tok, out_tok, think_tok
         except RateLimitError:
             if attempt == retries - 1:
                 raise
             wait = (2 ** attempt) + random.uniform(0, 1)
             await asyncio.sleep(wait)
-    return []
+    return [], 0, 0, 0
 
 
-async def extract_requirements(summaries: list[str], document_ids: list[str]) -> list[dict]:
+async def extract_requirements(
+    summaries: list[str], document_ids: list[str]
+) -> tuple[list[dict], UsageTotals]:
     """
-    Takes all chunk summaries for a project, returns list of requirement dicts.
+    Takes all chunk summaries for a project, returns (requirement dicts, usage).
     Each dict includes req_type, sdlc_topic, title, description, key_specifics, confidence.
     document_ids: list of document UUIDs that contributed to these summaries.
 
     Summaries are processed in batches of EXTRACTOR_BATCH_SIZE to avoid
-    output token truncation on large documents.
+    output token truncation on large documents. usage aggregates token counts
+    across every batch call for the Stage 1 metrics report.
     """
     batches = [
         summaries[i: i + EXTRACTOR_BATCH_SIZE]
@@ -128,8 +137,10 @@ async def extract_requirements(summaries: list[str], document_ids: list[str]) ->
     ])
 
     reqs: list[dict] = []
+    usage = UsageTotals()
     failed_batches = 0
-    for idx, batch_reqs in enumerate(batch_results):
+    for idx, (batch_reqs, in_tok, out_tok, think_tok) in enumerate(batch_results):
+        usage = usage.add(in_tok, out_tok, think_tok)
         if not batch_reqs:
             failed_batches += 1
             _logger.warning("Batch %d/%d returned 0 requirements", idx + 1, total_batches)
@@ -163,4 +174,4 @@ async def extract_requirements(summaries: list[str], document_ids: list[str]) ->
             _logger.warning("Invalid sdlc_topic %r → defaulting to 'requirements'", r.get("sdlc_topic"))
             r["sdlc_topic"] = "requirements"
 
-    return reqs
+    return reqs, usage

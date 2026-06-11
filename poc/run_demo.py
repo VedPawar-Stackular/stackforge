@@ -35,9 +35,11 @@ from pipeline.runner import ingest_document
 console = Console(legacy_windows=False)
 
 DEFAULT_DOCS = [
-    r"..\sample_client_docs\SOW_CareFlow_v1.4.docx",
-    r"..\sample_client_docs\MeetingTranscript_Workshop3_May14.txt",
-    r"..\sample_client_docs\ComplianceRequirements_HIPAA_SOC2.pdf",
+    r"..\sample_client_docs\BRD_MediBook_Apex_Health.docx",
+    r"..\sample_client_docs\SOW_MediBook_Apex_Health.docx",
+    r"..\sample_client_docs\Technical_Spec_MediBook.pdf",
+    r"..\sample_client_docs\Discovery_Call_Transcript_Dec15.txt",
+    r"..\sample_client_docs\Client_Email_Jan12.txt",
 ]
 
 
@@ -278,6 +280,32 @@ async def run(client_name: str, project_name: str, doc_paths: list[str]) -> None
     console.rule("[bold white]Clarification Questions[/]")
     print_clarifications(project_id)
 
+    # ── Stage 1 token economics ───────────────────────────────────────────────
+    from pipeline.metrics_terminal import render_stage_metrics
+    from pipeline.stage1_metrics_calculator import get_report as get_stage1_report
+
+    console.print()
+    console.rule("[bold yellow]Stage 1 — Token Economics[/]")
+    render_stage_metrics(console, get_stage1_report(project_id), "Stage 1 — Requirement Ingestion")
+
+    # ── Stage 2: Epic & User Story generation (so the demo shows full economics) ─
+    console.print()
+    console.rule("[bold magenta]Stage 2 — Epic & User Story Generation[/]")
+    try:
+        from pipeline.metrics_calculator import get_metrics_report as get_stage2_report
+        from pipeline.stage2_runner import run_stage2
+
+        with console.status("  [magenta]Generating epics & user stories...[/]"):
+            stage2_result = await run_stage2(project_id)
+        console.print(
+            f"  [green]✓[/] {stage2_result.get('epic_count', 0)} epics, "
+            f"{stage2_result.get('story_count', 0)} user stories"
+        )
+        console.print()
+        render_stage_metrics(console, get_stage2_report(project_id), "Stage 2 — Epics & Stories")
+    except Exception as e:
+        console.print(f"  [yellow]⚠ Stage 2 skipped:[/] {e}")
+
     # Write SDLC docs
     try:
         from pipeline.doc_writer import write_sdlc_docs
@@ -308,7 +336,9 @@ async def _run_with_progress(project_id, file_bytes, filename, ext):
     from pipeline.extractor import extract_requirements
     from pipeline.embedder import embed_chunk_summaries, embed_requirements
     from pipeline.clarifier import generate_clarifications
+    from pipeline.stage1_metrics_calculator import record_step
     import hashlib
+    import time
 
     content_hash = hashlib.sha256(file_bytes).hexdigest()
     doc_id = str(uuid.uuid4())
@@ -332,7 +362,10 @@ async def _run_with_progress(project_id, file_bytes, filename, ext):
     chunks = chunk(text)
     console.print(f"  [dim]→ {len(chunks)} chunks — summarising with {MODEL_CHEAP_NAME}...[/]")
 
-    summaries = await summarize_all(chunks)
+    _t0 = time.perf_counter()
+    summaries, summ_usage = await summarize_all(chunks, doc_name=filename)
+    record_step(project_id, "summarization", MODEL_CHEAP_NAME, summ_usage,
+                int((time.perf_counter() - _t0) * 1000))
 
     chunk_rows = []
     with DB() as db:
@@ -347,7 +380,10 @@ async def _run_with_progress(project_id, file_bytes, filename, ext):
                                 "raw_text": raw, "summary": summary})
 
     console.print(f"  [dim]→ extracting requirements with {MODEL_CAPABLE_NAME}...[/]")
-    reqs = await extract_requirements(summaries, [doc_id])
+    _t0 = time.perf_counter()
+    reqs, extr_usage = await extract_requirements(summaries, [doc_id])
+    record_step(project_id, "extraction", MODEL_CAPABLE_NAME, extr_usage,
+                int((time.perf_counter() - _t0) * 1000))
 
     req_rows = []
     with DB() as db:
@@ -367,7 +403,10 @@ async def _run_with_progress(project_id, file_bytes, filename, ext):
 
     console.print(f"  [dim]→ generating clarification questions...[/]")
     all_reqs = _fetch_reqs(project_id)
-    clarifications = await generate_clarifications(all_reqs)
+    _t0 = time.perf_counter()
+    clarifications, clar_usage = await generate_clarifications(all_reqs)
+    record_step(project_id, "clarification", MODEL_CHEAP_NAME, clar_usage,
+                int((time.perf_counter() - _t0) * 1000))
 
     with DB() as db:
         db.execute("DELETE FROM clarifications WHERE project_id = %s AND status = 'open'",

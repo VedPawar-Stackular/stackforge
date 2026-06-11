@@ -546,6 +546,162 @@ def render_requirement_card(r: dict):
     )
 
 
+def render_metrics_panel(metrics: dict, optimizations: list, baseline_label: str) -> None:
+    """Render a token-cost report (headline + chart + per-step breakdown + optimizations).
+
+    Shared by the Stage 1 and Stage 2 panels so both show identical structure,
+    including the thinking-token and Opus-equivalent (per-step model-choice) columns.
+    """
+    if not metrics or metrics.get("naive_cost_usd", 0) <= 0:
+        st.info("Metrics will appear here once this stage has run.")
+        return
+
+    savings_pct = metrics.get("savings_pct", 0)
+    actual = metrics.get("actual_cost_usd", 0)
+    naive = metrics.get("naive_cost_usd", 0)
+    tokens_saved = metrics.get("tokens_saved", 0)
+    thinking_total = metrics.get("actual_thinking_tokens", 0)
+
+    # ── Headline savings banner ────────────────────────────────────────────
+    st.markdown(
+        f'<div class="sf-card" style="background:linear-gradient(135deg,rgba(0,212,170,0.06),rgba(79,142,247,0.06));'
+        f'border-color:rgba(0,212,170,0.25);padding:20px 24px;">'
+        f'  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">'
+        f'    <div>'
+        f'      <div style="font-size:2rem;font-weight:700;color:#00d4aa;">{savings_pct:.0f}% cheaper</div>'
+        f'      <div style="font-size:0.8rem;color:#8b92a5;margin-top:2px;">{baseline_label}</div>'
+        f'    </div>'
+        f'    <div style="text-align:center;">'
+        f'      <div style="font-size:1.3rem;font-weight:600;color:#e8eaf0;">${actual:.4f}</div>'
+        f'      <div style="font-size:0.68rem;color:#8b92a5;text-transform:uppercase;letter-spacing:0.05em;">Actual cost</div>'
+        f'    </div>'
+        f'    <div style="text-align:center;opacity:0.5;">'
+        f'      <div style="font-size:1.3rem;font-weight:600;color:#e8eaf0;text-decoration:line-through;">${naive:.4f}</div>'
+        f'      <div style="font-size:0.68rem;color:#8b92a5;text-transform:uppercase;letter-spacing:0.05em;">Naive Opus baseline</div>'
+        f'    </div>'
+        f'    <div style="text-align:center;">'
+        f'      <div style="font-size:1.3rem;font-weight:600;color:#4f8ef7;">${naive - actual:.4f}</div>'
+        f'      <div style="font-size:0.68rem;color:#8b92a5;text-transform:uppercase;letter-spacing:0.05em;">Cost saved</div>'
+        f'    </div>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Comparison bar chart: actual vs Opus-equivalent per step ────────────
+    steps = metrics.get("steps", [])
+    try:
+        import plotly.graph_objects as go
+
+        if steps:
+            step_names = [
+                s["step"].replace("_", " ").replace("story generation epic ", "Epic ")
+                for s in steps
+            ]
+            actual_costs = [s["cost_usd"] for s in steps]
+            opus_costs = [s.get("opus_equivalent_cost_usd", 0) for s in steps]
+
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                name="Actual (optimized)", x=step_names, y=actual_costs,
+                marker_color="#4f8ef7",
+                text=[f"${c:.4f}" for c in actual_costs],
+                textposition="outside", textfont=dict(size=10, color="#8b92a5"),
+            ))
+            fig.add_trace(go.Bar(
+                name="Same work on Opus", x=step_names, y=opus_costs,
+                marker_color="#f4607e",
+                text=[f"${c:.4f}" for c in opus_costs],
+                textposition="outside", textfont=dict(size=10, color="#8b92a5"),
+            ))
+            fig.update_layout(
+                height=240, margin=dict(t=10, b=30, l=0, r=0),
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#8b92a5", size=10, family="Inter, system-ui"),
+                xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#8b92a5")),
+                yaxis=dict(showgrid=False, visible=False),
+                legend=dict(font=dict(color="#8b92a5"), bgcolor="rgba(0,0,0,0)", orientation="h"),
+                bargap=0.3, barmode="group",
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except ImportError:
+        pass
+
+    # ── Per-step breakdown ─────────────────────────────────────────────────
+    st.markdown('<div class="sf-section-header" style="margin-top:8px;">Step-by-Step Breakdown</div>', unsafe_allow_html=True)
+
+    for step in steps:
+        tier_badge_cls = {"haiku": "teal", "sonnet": "blue", "opus": "violet"}.get(step["tier"], "slate")
+        thinking = step.get("thinking_tokens", 0)
+        opus_eq = step.get("opus_equivalent_cost_usd", 0)
+        mult = step.get("opus_multiplier", 0)
+        mult_str = f"{mult:g}× cheaper than Opus" if mult else "—"
+        st.markdown(
+            f'<div class="sf-card" style="margin-bottom:8px;">'
+            f'  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">'
+            f'    <div style="flex:1;">'
+            f'      <div class="sf-card-title">{step["step"].replace("_", " ").title()}</div>'
+            f'      <div class="sf-card-meta" style="margin-top:6px;">'
+            f'        <span class="sf-badge sf-badge-{tier_badge_cls}">{step["tier"].upper()} tier</span>'
+            f'        <span class="sf-badge sf-badge-slate">{step["model"]}</span>'
+            f'        <span class="sf-badge sf-badge-slate">{step["input_tokens"]:,} in / {step["output_tokens"]:,} out</span>'
+            f'        <span class="sf-badge sf-badge-violet">{thinking:,} thinking</span>'
+            f'        <span class="sf-badge sf-badge-slate">{step["duration_ms"]}ms</span>'
+            f'      </div>'
+            f'      <div style="font-size:0.77rem;color:#8b92a5;margin-top:8px;line-height:1.5;">'
+            f'        {step["why_this_model"]}'
+            f'      </div>'
+            f'    </div>'
+            f'    <div style="text-align:right;white-space:nowrap;">'
+            f'      <div style="font-size:1.1rem;font-weight:600;color:#00d4aa;">${step["cost_usd"]:.4f}</div>'
+            f'      <div style="font-size:0.68rem;color:#8b92a5;">actual (Anthropic rates)</div>'
+            f'      <div style="font-size:0.9rem;font-weight:600;color:#f4607e;text-decoration:line-through;margin-top:6px;">${opus_eq:.4f}</div>'
+            f'      <div style="font-size:0.66rem;color:#8b92a5;">{mult_str}</div>'
+            f'    </div>'
+            f'  </div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Optimization decisions summary ─────────────────────────────────────
+    if optimizations:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="sf-section-header">What Made It Cheap</div>', unsafe_allow_html=True)
+        cols = st.columns(2)
+        for i, (title, desc, badge_cls) in enumerate(optimizations):
+            cols[i % 2].markdown(
+                f'<div class="sf-card" style="padding:12px 16px;margin-bottom:6px;">'
+                f'  <div style="display:flex;align-items:flex-start;gap:10px;">'
+                f'    <span class="sf-badge sf-badge-{badge_cls}" style="margin-top:2px;white-space:nowrap;">{title}</span>'
+                f'    <div style="font-size:0.78rem;color:#8b92a5;line-height:1.5;">{desc}</div>'
+                f'  </div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+
+# Optimization callouts per stage — passed to render_metrics_panel.
+STAGE1_OPTIMIZATIONS = [
+    ("Map-reduce summarization", "Raw chunks compressed by the cheap model first — the capable model never sees raw document text.", "teal"),
+    ("Cheap model routing", "Summarization & clarification run on the Haiku-tier model; only extraction uses the mid tier.", "blue"),
+    ("Batched extraction", "Summaries extracted in batches with a strict JSON schema + max_tokens cap — no prose padding.", "amber"),
+    ("Chunk overlap, not resend", "35-word sliding overlap preserves context across chunks without re-sending whole sections.", "violet"),
+    ("Content-hash skip", "Unchanged documents are skipped entirely — no re-summarization, no re-extraction.", "slate"),
+    ("Caching-ready prompts", "Static system prompts are eligible for Anthropic prompt caching — 90% cost cut on cache hits in production.", "slate"),
+]
+
+STAGE2_OPTIMIZATIONS = [
+    ("Model routing", "Cheap model for decomposition, mid model for generation — not everything on Opus.", "teal"),
+    ("Context scoping", "Each story-generation call receives only that epic's requirements (~15-20), not all 130.", "blue"),
+    ("Titles-only decomposition", "Epic grouping uses titles only, not full descriptions — 77% input token reduction.", "blue"),
+    ("Parallel execution", "All epic story calls run simultaneously via asyncio.gather — ~7x faster than serial.", "violet"),
+    ("Structured JSON output", "max_tokens cap + strict schema — eliminates prose padding (~40% output reduction).", "amber"),
+    ("Caching-ready architecture", "Static system prompts eligible for Anthropic prompt caching — 90% cost reduction on cache hits in production.", "slate"),
+]
+
+
 def render_status_badge(status: str) -> str:
     cls = {
         "done": "teal", "ready": "teal",
@@ -1087,6 +1243,15 @@ with tab_review:
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             except ImportError:
                 pass  # Plotly not available — skip chart
+
+            # ── Stage 1 token cost report ──────────────────────────────────
+            st.divider()
+            st.markdown('<div class="sf-section-header">Stage 1 — Token Cost Report</div>', unsafe_allow_html=True)
+            stage1_metrics = cached_get(f"/projects/{project_id}/stage1-metrics")
+            render_metrics_panel(
+                stage1_metrics, STAGE1_OPTIMIZATIONS,
+                "vs feeding raw documents straight to Opus",
+            )
 
             st.divider()
 
@@ -1697,125 +1862,7 @@ with tab_epics:
             st.markdown('<div class="sf-section-header">Token Cost Optimization Report</div>', unsafe_allow_html=True)
 
             metrics = cached_get(f"/projects/{project_id}/stage2-metrics")
-            if metrics and metrics.get("naive_cost_usd", 0) > 0:
-                savings_pct = metrics.get("savings_pct", 0)
-                actual = metrics.get("actual_cost_usd", 0)
-                naive = metrics.get("naive_cost_usd", 0)
-                tokens_saved = metrics.get("tokens_saved", 0)
-
-                # ── Headline savings banner ────────────────────────────────
-                st.markdown(
-                    f'<div class="sf-card" style="background:linear-gradient(135deg,rgba(0,212,170,0.06),rgba(79,142,247,0.06));'
-                    f'border-color:rgba(0,212,170,0.25);padding:20px 24px;">'
-                    f'  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">'
-                    f'    <div>'
-                    f'      <div style="font-size:2rem;font-weight:700;color:#00d4aa;">{savings_pct:.0f}% cheaper</div>'
-                    f'      <div style="font-size:0.8rem;color:#8b92a5;margin-top:2px;">vs naive unoptimized approach</div>'
-                    f'    </div>'
-                    f'    <div style="text-align:center;">'
-                    f'      <div style="font-size:1.3rem;font-weight:600;color:#e8eaf0;">${actual:.4f}</div>'
-                    f'      <div style="font-size:0.68rem;color:#8b92a5;text-transform:uppercase;letter-spacing:0.05em;">Actual cost</div>'
-                    f'    </div>'
-                    f'    <div style="text-align:center;opacity:0.5;">'
-                    f'      <div style="font-size:1.3rem;font-weight:600;color:#e8eaf0;text-decoration:line-through;">${naive:.4f}</div>'
-                    f'      <div style="font-size:0.68rem;color:#8b92a5;text-transform:uppercase;letter-spacing:0.05em;">Naive baseline</div>'
-                    f'    </div>'
-                    f'    <div style="text-align:center;">'
-                    f'      <div style="font-size:1.3rem;font-weight:600;color:#4f8ef7;">{tokens_saved:,}</div>'
-                    f'      <div style="font-size:0.68rem;color:#8b92a5;text-transform:uppercase;letter-spacing:0.05em;">Tokens saved</div>'
-                    f'    </div>'
-                    f'  </div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-                st.markdown("<br>", unsafe_allow_html=True)
-
-                # ── Comparison bar chart ───────────────────────────────────
-                try:
-                    import plotly.graph_objects as go
-
-                    steps = metrics.get("steps", [])
-                    if steps:
-                        step_names = [s["step"].replace("_", " ").replace("story generation epic ", "Epic ") for s in steps]
-                        actual_costs = [s["cost_usd"] for s in steps]
-
-                        fig = go.Figure()
-                        fig.add_trace(go.Bar(
-                            name="Actual (optimized)",
-                            x=step_names,
-                            y=actual_costs,
-                            marker_color="#4f8ef7",
-                            text=[f"${c:.4f}" for c in actual_costs],
-                            textposition="outside",
-                            textfont=dict(size=10, color="#8b92a5"),
-                        ))
-                        fig.update_layout(
-                            height=220,
-                            margin=dict(t=10, b=30, l=0, r=0),
-                            plot_bgcolor="rgba(0,0,0,0)",
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            font=dict(color="#8b92a5", size=10, family="Inter, system-ui"),
-                            xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#8b92a5")),
-                            yaxis=dict(showgrid=False, visible=False),
-                            legend=dict(font=dict(color="#8b92a5"), bgcolor="rgba(0,0,0,0)"),
-                            bargap=0.35,
-                            showlegend=False,
-                        )
-                        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-                except ImportError:
-                    pass
-
-                # ── Per-step breakdown table ───────────────────────────────
-                st.markdown('<div class="sf-section-header" style="margin-top:8px;">Step-by-Step Breakdown</div>', unsafe_allow_html=True)
-
-                for step in metrics.get("steps", []):
-                    tier_badge_cls = {"haiku": "teal", "sonnet": "blue", "opus": "violet"}.get(step["tier"], "slate")
-                    st.markdown(
-                        f'<div class="sf-card" style="margin-bottom:8px;">'
-                        f'  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">'
-                        f'    <div style="flex:1;">'
-                        f'      <div class="sf-card-title">{step["step"].replace("_", " ").title()}</div>'
-                        f'      <div class="sf-card-meta" style="margin-top:6px;">'
-                        f'        <span class="sf-badge sf-badge-{tier_badge_cls}">{step["tier"].upper()} tier</span>'
-                        f'        <span class="sf-badge sf-badge-slate">{step["model"]}</span>'
-                        f'        <span class="sf-badge sf-badge-slate">{step["input_tokens"]:,} in / {step["output_tokens"]:,} out tokens</span>'
-                        f'        <span class="sf-badge sf-badge-slate">{step["duration_ms"]}ms</span>'
-                        f'      </div>'
-                        f'      <div style="font-size:0.77rem;color:#8b92a5;margin-top:8px;line-height:1.5;">'
-                        f'        {step["why_this_model"]}'
-                        f'      </div>'
-                        f'    </div>'
-                        f'    <div style="text-align:right;white-space:nowrap;">'
-                        f'      <div style="font-size:1.1rem;font-weight:600;color:#e8eaf0;">${step["cost_usd"]:.4f}</div>'
-                        f'      <div style="font-size:0.68rem;color:#8b92a5;">at Anthropic rates</div>'
-                        f'    </div>'
-                        f'  </div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-
-                # ── Optimization decisions summary ─────────────────────────
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown('<div class="sf-section-header">What Made It Cheap</div>', unsafe_allow_html=True)
-                optimizations = [
-                    ("Model routing", "Cheap model for decomposition, mid model for generation — not everything on Opus.", "teal"),
-                    ("Context scoping", "Each story-generation call receives only that epic's requirements (~15-20), not all 130.", "blue"),
-                    ("Titles-only decomposition", "Epic grouping uses titles only, not full descriptions — 77% input token reduction.", "blue"),
-                    ("Parallel execution", "All epic story calls run simultaneously via asyncio.gather — ~7x faster than serial.", "violet"),
-                    ("Structured JSON output", "max_tokens cap + strict schema — eliminates prose padding (~40% output reduction).", "amber"),
-                    ("Caching-ready architecture", "Static system prompts eligible for Anthropic prompt caching — 90% cost reduction on cache hits in production.", "slate"),
-                ]
-                cols = st.columns(2)
-                for i, (title, desc, badge_cls) in enumerate(optimizations):
-                    cols[i % 2].markdown(
-                        f'<div class="sf-card" style="padding:12px 16px;margin-bottom:6px;">'
-                        f'  <div style="display:flex;align-items:flex-start;gap:10px;">'
-                        f'    <span class="sf-badge sf-badge-{badge_cls}" style="margin-top:2px;white-space:nowrap;">{title}</span>'
-                        f'    <div style="font-size:0.78rem;color:#8b92a5;line-height:1.5;">{desc}</div>'
-                        f'  </div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-            else:
-                st.info("Metrics will appear here after generation completes.")
+            render_metrics_panel(
+                metrics, STAGE2_OPTIMIZATIONS,
+                "vs naive all-Opus monolithic approach",
+            )
