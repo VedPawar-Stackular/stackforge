@@ -7,12 +7,15 @@ Uses the cheap model (llama-3.1-8b-instant / Haiku).
 
 import asyncio
 import json
+import logging
 import random
 
 from openai import RateLimitError
 
 from config import MODEL_CHEAP
 from pipeline.llm_utils import get_llm_client
+
+_logger = logging.getLogger(__name__)
 
 _client = get_llm_client()
 
@@ -58,7 +61,16 @@ async def generate_clarifications(requirements: list[dict], retries: int = 4) ->
                 data = json.loads(response.choices[0].message.content)
             except json.JSONDecodeError:
                 data = {}
-            return data.get("clarifications", [])
+            clarifications = data.get("clarifications", [])
+            _VALID_PRIORITIES = {"high", "medium", "low"}
+            for c in clarifications:
+                if c.get("priority") not in _VALID_PRIORITIES:
+                    _logger.warning(
+                        "Invalid clarification priority %r → defaulting to 'medium'",
+                        c.get("priority"),
+                    )
+                    c["priority"] = "medium"
+            return clarifications
         except RateLimitError:
             if attempt == retries - 1:
                 raise

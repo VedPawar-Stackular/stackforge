@@ -82,7 +82,9 @@ def create_epic(title: str, description: str, area_path: str = "", tags: str = "
     """
     body = [
         {"op": "add", "path": "/fields/System.Title", "value": title},
-        {"op": "add", "path": "/fields/System.Description", "value": description},
+        # html.escape() prevents LLM-generated content with <, >, & from
+        # breaking ADO's HTML rich-text renderer.
+        {"op": "add", "path": "/fields/System.Description", "value": html.escape(description)},
     ]
     if area_path:
         body.append({"op": "add", "path": "/fields/System.AreaPath", "value": area_path})
@@ -111,7 +113,7 @@ def create_user_story(
 
     body = [
         {"op": "add", "path": "/fields/System.Title", "value": title},
-        {"op": "add", "path": "/fields/System.Description", "value": description},
+        {"op": "add", "path": "/fields/System.Description", "value": html.escape(description)},
         {"op": "add", "path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria", "value": ac_html},
         # Link to parent epic: Hierarchy-Reverse = child→parent direction
         {

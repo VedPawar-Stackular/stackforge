@@ -142,6 +142,7 @@ async def _generate_for_epic(
     requirements_by_id: dict[str, dict],
     semaphore: asyncio.Semaphore,
     global_constraints: list[dict],
+    clarification_answers: list[dict],
     retries: int = 4,
 ) -> tuple[list[dict], int, int, int]:
     """
@@ -156,6 +157,10 @@ async def _generate_for_epic(
     them in acceptance criteria. Requirements already in this epic are deduped
     out to avoid repeating context.
 
+    clarification_answers are direct client responses to clarification questions.
+    They carry the highest-confidence content in the project and are injected
+    after global constraints so ACs can reference client's own words.
+
     Returns (stories, input_tokens, output_tokens, duration_ms).
     """
     epic_req_ids = [str(rid) for rid in epic.get("requirement_ids", [])]
@@ -168,10 +173,17 @@ async def _generate_for_epic(
     if not epic_reqs:
         return [], 0, 0, 0
 
-    req_text = "\n".join(
-        f"- [{r['req_type']}] {r['title']}: {r['description']}"
-        for r in epic_reqs
-    )
+    # Include key_specifics (verbatim measurements/terms) after each requirement
+    # description so the model can anchor ACs to specific client-stated values.
+    req_lines = []
+    for r in epic_reqs:
+        line = f"- [{r['req_type']}] {r['title']}: {r['description']}"
+        specifics = [s for s in r.get("key_specifics", []) if s]
+        if specifics:
+            line += f" (specifics: {'; '.join(specifics)})"
+        req_lines.append(line)
+    req_text = "\n".join(req_lines)
+
     prompt = (
         f"Epic: {epic['title']}\n"
         f"Description: {epic.get('description', '')}\n\n"
@@ -194,6 +206,21 @@ async def _generate_for_epic(
             f"\n\nGlobal Constraints (apply to ALL stories in this epic — "
             f"reflect in acceptance criteria):\n{constraint_text}"
         )
+
+    # Inject direct client answers — these are the highest-confidence content
+    # in the project. ACs should reference client's own words where relevant.
+    if clarification_answers:
+        answers_text = "\n".join(
+            f"- Q: {a['question']} → A: {a['answer']}"
+            for a in clarification_answers
+            if a.get("answer")
+        )
+        if answers_text:
+            prompt += (
+                "\n\nClient Confirmations (direct client answers — treat as "
+                "definitive requirements, reflect specific details in acceptance "
+                f"criteria):\n{answers_text}"
+            )
 
     for attempt in range(retries):
         try:
@@ -246,6 +273,7 @@ async def generate_stories_for_all_epics(
     epics: list[dict],
     requirements_by_id: dict[str, dict],
     global_constraints: list[dict] | None = None,
+    clarification_answers: list[dict] | None = None,
 ) -> list[tuple[dict, list[dict], int, int, int]]:
     """
     Generate stories for all epics in parallel.
@@ -257,16 +285,21 @@ async def generate_stories_for_all_epics(
     prompt so acceptance criteria reflect project-wide constraints. Pass an
     empty list (or None) to skip injection.
 
+    clarification_answers: answered client clarifications injected into every
+    epic's prompt as definitive confirmation of requirements. Pass an empty
+    list (or None) to skip injection.
+
     Returns list of (epic, stories, input_tokens, output_tokens, duration_ms).
     """
     constraints = global_constraints or []
+    answers = clarification_answers or []
 
     # Semaphore created here — belongs to current event loop, shared across
     # all parallel epic calls to respect the Groq 30 req/min rate limit.
     semaphore = asyncio.Semaphore(5)
 
     tasks = [
-        _generate_for_epic(epic, requirements_by_id, semaphore, constraints)
+        _generate_for_epic(epic, requirements_by_id, semaphore, constraints, answers)
         for epic in epics
     ]
     results = await asyncio.gather(*tasks)

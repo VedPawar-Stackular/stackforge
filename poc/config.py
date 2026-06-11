@@ -18,6 +18,10 @@ MODEL_CAPABLE: str = "llama-3.3-70b-versatile"  # structured requirement extract
 CHUNK_TARGET_WORDS: int = 275  # target ~250-300 words per chunk
 CHUNK_OVERLAP_WORDS: int = 35  # tail words from previous chunk prepended to next
 
+# Extraction batching — summaries are sent to the extractor in groups of this
+# size to avoid truncating large requirement sets at max_tokens=2048.
+EXTRACTOR_BATCH_SIZE: int = 10
+
 # Embedding model (local, 384-dim) — disabled on Python 3.14 (no wheels)
 EMBED_MODEL: str = "all-MiniLM-L6-v2"
 

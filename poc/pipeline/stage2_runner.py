@@ -24,6 +24,7 @@ from db import DB
 from pipeline.ado_client import create_epic, create_user_story, ensure_area_path
 from pipeline.epic_generator import generate_epics
 from pipeline.story_generator import generate_stories_for_all_epics
+from pipeline.utils import text_array_literal
 
 _logger = logging.getLogger(__name__)
 
@@ -51,18 +52,6 @@ def _extract_global_constraints(requirements: list[dict]) -> list[dict]:
     ]
 
 
-def _text_array_literal(items: list[str]) -> str:
-    """Convert a Python list to a PostgreSQL TEXT[] literal string for pg8000."""
-    if not items:
-        return "{}"
-    escaped = []
-    for item in items:
-        # Escape backslashes first, then double quotes, then strip newlines
-        item = item.replace("\\", "\\\\").replace('"', '\\"')
-        item = item.replace("\n", " ").replace("\r", "")
-        escaped.append(f'"{item}"')
-    return "{" + ",".join(escaped) + "}"
-
 
 async def run_stage2(project_id: str) -> dict:
     """
@@ -86,9 +75,9 @@ async def run_stage2(project_id: str) -> dict:
         with DB() as db:
             requirements = db.fetch_all(
                 """
-                SELECT id, title, req_type, sdlc_topic, description
+                SELECT id, title, req_type, sdlc_topic, description, key_specifics
                 FROM requirements
-                WHERE project_id = %s
+                WHERE project_id = %s AND status != 'duplicate'
                 ORDER BY created_at
                 """,
                 (project_id,),
@@ -100,6 +89,8 @@ async def run_stage2(project_id: str) -> dict:
         # pg8000 returns UUID objects; convert to strings for JSON handling
         for r in requirements:
             r["id"] = str(r["id"])
+            # pg8000 may return None for TEXT[] columns with no value
+            r["key_specifics"] = list(r.get("key_specifics") or [])
 
         requirements_by_id = {r["id"]: r for r in requirements}
 
@@ -107,6 +98,19 @@ async def run_stage2(project_id: str) -> dict:
         # (budget, testing, integrations, team_and_process topics + constraint type)
         # to inject into every epic's story generation prompt.
         global_constraints = _extract_global_constraints(requirements)
+
+        # Fetch direct client answers — highest-confidence content in the project.
+        # Injected into every epic's story prompt alongside global constraints.
+        with DB() as db:
+            answered_clarifications = db.fetch_all(
+                """
+                SELECT question, answer, context
+                FROM clarifications
+                WHERE project_id = %s AND status = 'answered'
+                ORDER BY created_at
+                """,
+                (project_id,),
+            )
 
         # ── Step 1: Epic decomposition (cheap model, titles only) ────────────
         epics, epic_in_tok, epic_out_tok, epic_dur = await generate_epics(requirements)
@@ -144,7 +148,10 @@ async def run_stage2(project_id: str) -> dict:
 
         # ── Step 2: Story generation (mid model, per epic, parallel) ─────────
         results = await generate_stories_for_all_epics(
-            epic_rows, requirements_by_id, global_constraints
+            epic_rows,
+            requirements_by_id,
+            global_constraints,
+            clarification_answers=answered_clarifications,
         )
 
         total_stories = 0
@@ -174,7 +181,7 @@ async def run_stage2(project_id: str) -> dict:
                             project_id,
                             story.get("title", "Untitled Story"),
                             story.get("description", ""),
-                            _text_array_literal(ac_list),
+                            text_array_literal(ac_list),
                             story.get("story_points"),
                             story.get("assignee"),
                         ),
