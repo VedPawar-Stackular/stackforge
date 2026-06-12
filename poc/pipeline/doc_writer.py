@@ -8,7 +8,7 @@ No LLM calls — requirements are already structured data; this is pure formatti
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import SDLC_TOPICS
 from db import DB
@@ -93,7 +93,7 @@ def _render_topic_doc(
     cross_cutting: list | None = None,
 ) -> str:
     label = _TOPIC_LABELS.get(topic, topic.replace("_", " ").title())
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     lines = [
         f"# {project_name} — {label}",

@@ -35,6 +35,7 @@ TOKEN OPTIMIZATION:
 
 import asyncio
 import json
+import logging
 import random
 import time
 
@@ -44,6 +45,8 @@ from config import MODEL_CAPABLE
 from pipeline.llm_utils import extract_usage, get_llm_client
 
 _client = get_llm_client()
+_logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 # Static system prompt with 2 few-shot examples.
 # Format is demonstrated, not described — shorter prompt, better consistency.
@@ -247,7 +250,11 @@ async def _generate_for_epic(
                     stories = next((v for v in parsed.values() if isinstance(v, list)), [])
                 else:
                     stories = []
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                _logger.warning(
+                    "Story generation JSON parse failed for epic '%s' (attempt %d): %s",
+                    epic.get("title", "?"), attempt + 1, exc,
+                )
                 stories = []
 
             # Ensure required keys

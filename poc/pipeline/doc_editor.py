@@ -8,7 +8,7 @@ and returns the updated content.
 
 from config import MODEL_CHEAP
 from pipeline.doc_writer import get_doc_path
-from pipeline.llm_utils import get_llm_client
+from pipeline.llm_utils import call_with_retry, get_llm_client
 
 _client = get_llm_client()
 
@@ -38,16 +38,17 @@ async def apply_edit(project_id: str, topic: str, instruction: str) -> str:
         f"Edit instruction: {instruction}"
     )
 
-    response = await _client.chat.completions.create(
+    raw = await call_with_retry(
+        _client,
         model=MODEL_CHEAP,
-        max_tokens=4096,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
         ],
+        max_tokens=4096,
     )
 
-    updated = response.choices[0].message.content.strip()
+    updated = raw.strip()
 
     with open(doc_path, "w", encoding="utf-8") as f:
         f.write(updated)

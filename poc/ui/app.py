@@ -11,8 +11,10 @@ StackForge POC — Streamlit UI (redesigned for demos)
 
 import sys
 import os
+import threading
 import time
 import json as _json
+import urllib.parse
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -469,21 +471,24 @@ def api_delete(path: str) -> bool:
 # ─── Scoped GET cache (replaces @st.cache_data — supports per-path invalidation) ─
 
 _cache_store: dict[str, tuple] = {}
+_cache_lock = threading.Lock()
 _CACHE_TTL = 15
 
 
 def cached_get(path: str) -> dict | list | None:
     """GET with 15s per-path TTL. Use invalidate_cache() after mutations."""
     now = time.time()
-    if path in _cache_store:
-        val, ts = _cache_store[path]
-        if now - ts < _CACHE_TTL:
-            return val
+    with _cache_lock:
+        if path in _cache_store:
+            val, ts = _cache_store[path]
+            if now - ts < _CACHE_TTL:
+                return val
     try:
-        r = httpx.get(f"{API_BASE}{path}", timeout=30)
+        r = _http().get(f"{API_BASE}{path}", timeout=30)
         r.raise_for_status()
         result = r.json()
-        _cache_store[path] = (result, now)
+        with _cache_lock:
+            _cache_store[path] = (result, now)
         return result
     except Exception:
         return None
@@ -491,15 +496,17 @@ def cached_get(path: str) -> dict | list | None:
 
 def invalidate_cache(*paths: str) -> None:
     """Invalidate specific cache paths after a mutating operation."""
-    for p in paths:
-        _cache_store.pop(p, None)
+    with _cache_lock:
+        for p in paths:
+            _cache_store.pop(p, None)
 
 
 def invalidate_project_cache(project_id: str) -> None:
     """Invalidate all cached paths that reference a specific project."""
-    stale = [k for k in _cache_store if project_id in k]
-    for k in stale:
-        _cache_store.pop(k, None)
+    with _cache_lock:
+        stale = [k for k in _cache_store if project_id in k]
+        for k in stale:
+            _cache_store.pop(k, None)
 
 
 def get_projects() -> list[dict]:
@@ -1740,7 +1747,7 @@ with tab_epics:
                 ado_type = "secondary" if ado_pushed else "primary"
                 _push_url = f"/projects/{project_id}/push-to-ado"
                 if _area_path:
-                    _push_url += f"?area_path={_area_path}"
+                    _push_url += f"?area_path={urllib.parse.quote(_area_path, safe='')}"
                 if st.button(ado_label, key="btn_push_ado", type=ado_type, use_container_width=True):
                     push_result = api_post(_push_url)
                     if push_result is None:

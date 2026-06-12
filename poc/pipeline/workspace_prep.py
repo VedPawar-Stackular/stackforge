@@ -22,6 +22,7 @@ import logging
 import os
 import shutil
 import sys
+import uuid as _uuid_mod
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 _logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ def prep_workspace(project_id: str, workspace_path: str) -> bool:
     Returns False if no Stitch designs exist yet (non-fatal — agent starts without them).
     Raises on filesystem errors (fatal).
     """
+    # Validate project_id is a UUID to prevent path traversal
+    _uuid_mod.UUID(project_id)
     stitch_dir = os.path.join(_POC_ROOT, "output", project_id, "stitch")
     design_md_src = os.path.join(stitch_dir, "DESIGN.md")
     metadata_path = os.path.join(stitch_dir, "metadata.json")

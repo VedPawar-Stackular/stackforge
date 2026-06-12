@@ -30,8 +30,9 @@ import logging
 import os
 import random
 import re
+from datetime import datetime, timezone
 
-from openai import RateLimitError
+from openai import APIError, RateLimitError
 
 from config import MODEL_CHEAP, STITCH_API_KEY
 from db import DB
@@ -133,8 +134,8 @@ async def _generate_design_md(project_name: str, screens: list[dict], design_md_
             ],
         )
         return response.choices[0].message.content.strip()
-    except Exception as e:
-        _logger.warning("DESIGN.md generation failed: %s", e)
+    except (RateLimitError, APIError) as e:
+        _logger.error("DESIGN.md generation failed: %s", e, exc_info=True)
         return _fallback_design_md(project_name, screens)
 
 
@@ -294,7 +295,6 @@ async def generate_stitch_designs(project_id: str, project_name: str, screens: l
         f.write(design_md_text)
 
     # 5. Write metadata.json
-    from datetime import datetime, timezone
     metadata = {
         "stitch_project_id": stitch_project_id,
         "stitch_project_url": stitch_project_url,

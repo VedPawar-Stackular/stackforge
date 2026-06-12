@@ -8,6 +8,7 @@ GET  /projects/{project_id}/stitch           — return status + screen list
 import json
 import logging
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
@@ -98,7 +99,6 @@ def get_stitch_status(project_id: str):
     with open(metadata_path, encoding="utf-8") as f:
         meta = json.load(f)
 
-    from datetime import datetime
     screens = [
         StitchScreen(
             name=s["name"],

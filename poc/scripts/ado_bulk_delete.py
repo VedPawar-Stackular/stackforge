@@ -78,12 +78,15 @@ def main() -> None:
 
     with DB() as db:
         if args.project_id:
-            where = "WHERE project_id = %s AND ado_work_item_id IS NOT NULL"
             epics = db.fetch_all(
-                f"SELECT id, ado_work_item_id, title FROM epics {where}", (args.project_id,)
+                "SELECT id, ado_work_item_id, title FROM epics"
+                " WHERE project_id = %s AND ado_work_item_id IS NOT NULL",
+                (args.project_id,),
             )
             stories = db.fetch_all(
-                f"SELECT id, ado_work_item_id, title FROM user_stories {where}", (args.project_id,)
+                "SELECT id, ado_work_item_id, title FROM user_stories"
+                " WHERE project_id = %s AND ado_work_item_id IS NOT NULL",
+                (args.project_id,),
             )
         else:
             epics = db.fetch_all(
@@ -133,17 +136,17 @@ def main() -> None:
     if args.clear_db and not args.dry_run and (deleted_story_ids or deleted_epic_ids):
         with DB() as db:
             if deleted_story_ids:
-                ph = ",".join(["%s"] * len(deleted_story_ids))
+                placeholders = ",".join(["%s"] * len(deleted_story_ids))
                 db.execute(
-                    f"UPDATE user_stories SET ado_work_item_id = NULL, ado_work_item_url = NULL "
-                    f"WHERE id IN ({ph})",
+                    "UPDATE user_stories SET ado_work_item_id = NULL, ado_work_item_url = NULL"
+                    " WHERE id IN (" + placeholders + ")",
                     tuple(deleted_story_ids),
                 )
             if deleted_epic_ids:
-                ph = ",".join(["%s"] * len(deleted_epic_ids))
+                placeholders = ",".join(["%s"] * len(deleted_epic_ids))
                 db.execute(
-                    f"UPDATE epics SET ado_work_item_id = NULL, ado_work_item_url = NULL "
-                    f"WHERE id IN ({ph})",
+                    "UPDATE epics SET ado_work_item_id = NULL, ado_work_item_url = NULL"
+                    " WHERE id IN (" + placeholders + ")",
                     tuple(deleted_epic_ids),
                 )
         _log.info("Cleared DB — items can be re-pushed.")

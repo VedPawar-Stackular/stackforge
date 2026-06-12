@@ -115,12 +115,6 @@ async def _summarize_with_retry(
     raise RuntimeError("summarize_chunk: all retries exhausted without a result")
 
 
-# Shared across ALL concurrent summarize_all() calls so the 5-slot cap is
-# a true global rate-limit gate, not per-document. Safe in Python 3.10+ because
-# Semaphore binds to the running event loop on first await, not at construction.
-_semaphore = asyncio.Semaphore(5)
-
-
 async def summarize_all(chunks: list[str], doc_name: str = "") -> tuple[list[str], UsageTotals]:
     """Summarise all chunks with rate-limit-safe concurrency.
 
@@ -132,7 +126,11 @@ async def summarize_all(chunks: list[str], doc_name: str = "") -> tuple[list[str
     """
     mode = _detect_doc_mode(doc_name)
     _logger.info("Summarizer mode: %s (doc: %s)", mode, doc_name or "<unknown>")
-    tasks = [_summarize_with_retry(c, _semaphore, mode=mode) for c in chunks]
+    # Semaphore created here so it always binds to the current event loop.
+    # A module-level semaphore would bind to a different loop when this is
+    # called via asyncio.run() from a FastAPI background thread (epics.py).
+    semaphore = asyncio.Semaphore(5)
+    tasks = [_summarize_with_retry(c, semaphore, mode=mode) for c in chunks]
     results = await asyncio.gather(*tasks)
 
     summaries: list[str] = []

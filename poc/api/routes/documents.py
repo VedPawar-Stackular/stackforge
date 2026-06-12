@@ -1,6 +1,10 @@
 """Routes: document upload and pipeline trigger."""
 
 import asyncio
+import datetime
+import hashlib
+import logging
+import uuid
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
 
@@ -9,6 +13,7 @@ from db import DB
 from pipeline.runner import ingest_document
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
+_logger = logging.getLogger(__name__)
 
 ALLOWED_TYPES = {"pdf", "docx", "txt"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
@@ -56,14 +61,13 @@ async def upload_document(
     )
 
     # Return a minimal document stub — actual document row is created inside the pipeline
-    import hashlib, uuid, datetime
     content_hash = hashlib.sha256(file_bytes).hexdigest()
     return {
         "id": uuid.uuid4(),
         "filename": filename,
         "file_type": ext,
         "status": "processing",
-        "uploaded_at": datetime.datetime.utcnow(),
+        "uploaded_at": datetime.datetime.now(datetime.timezone.utc),
     }
 
 
@@ -121,7 +125,8 @@ async def _run_pipeline_and_update_project(
                 "UPDATE projects SET status = %s WHERE id = %s",
                 (new_status, project_id),
             )
-    except Exception as e:
+    except Exception:
+        _logger.exception("Pipeline failed for project %s", project_id)
         with DB() as db:
             db.execute(
                 "UPDATE projects SET status = 'failed' WHERE id = %s",

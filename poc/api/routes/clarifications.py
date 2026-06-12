@@ -1,5 +1,7 @@
 """Routes: clarification questions and answers."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from api.models import AnswerRequest, ClarificationResponse, QueryRequest, RagChunkResponse
@@ -9,6 +11,7 @@ from rag.reranker import rerank
 from rag.search import hybrid_search
 
 router = APIRouter(tags=["clarifications & query"])
+_logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -55,7 +58,13 @@ def answer_clarification(project_id: str, clarification_id: str, body: AnswerReq
         updated = db.fetch_one(
             "SELECT * FROM clarifications WHERE id = %s", (clarification_id,)
         )
-        embed_clarification(db, project_id, updated)
+
+    # Outside the answer transaction — a RAG failure must not roll back the answer
+    try:
+        with DB() as db2:
+            embed_clarification(db2, project_id, updated)
+    except Exception:
+        _logger.warning("RAG embed failed for clarification %s", clarification_id, exc_info=True)
 
     return updated
 

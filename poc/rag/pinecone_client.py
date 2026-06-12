@@ -10,8 +10,9 @@ Handles:
 Falls back gracefully if PINECONE_ENABLED is False (key not set).
 """
 
-import time
 import logging
+import threading
+import time
 
 from config import (
     PINECONE_API_KEY,
@@ -28,44 +29,47 @@ logger = logging.getLogger(__name__)
 
 _pc = None
 _index = None
+_lock = threading.Lock()
 
 
 def _get_client():
     global _pc
-    if _pc is None:
-        from pinecone import Pinecone
-        _pc = Pinecone(api_key=PINECONE_API_KEY)
+    with _lock:
+        if _pc is None:
+            from pinecone import Pinecone
+            _pc = Pinecone(api_key=PINECONE_API_KEY)
     return _pc
 
 
 def get_index():
     """Return the Pinecone index, creating it if it doesn't exist yet."""
     global _index
-    if _index is not None:
+    with _lock:
+        if _index is not None:
+            return _index
+
+        from pinecone import ServerlessSpec
+
+        pc = _get_client()
+        existing = {idx.name for idx in pc.list_indexes()}
+
+        if PINECONE_INDEX_NAME not in existing:
+            logger.info("Creating Pinecone index '%s'...", PINECONE_INDEX_NAME)
+            pc.create_index(
+                name=PINECONE_INDEX_NAME,
+                dimension=PINECONE_DIMENSION,
+                metric="cosine",
+                spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
+            )
+            # Wait until index is ready (creation is async on Pinecone side)
+            for _ in range(30):
+                status = pc.describe_index(PINECONE_INDEX_NAME).status
+                if status.get("ready"):
+                    break
+                time.sleep(2)
+
+        _index = pc.Index(PINECONE_INDEX_NAME)
         return _index
-
-    from pinecone import ServerlessSpec
-
-    pc = _get_client()
-    existing = {idx.name for idx in pc.list_indexes()}
-
-    if PINECONE_INDEX_NAME not in existing:
-        logger.info("Creating Pinecone index '%s'...", PINECONE_INDEX_NAME)
-        pc.create_index(
-            name=PINECONE_INDEX_NAME,
-            dimension=PINECONE_DIMENSION,
-            metric="cosine",
-            spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
-        )
-        # Wait until index is ready (creation is async on Pinecone side)
-        for _ in range(30):
-            status = pc.describe_index(PINECONE_INDEX_NAME).status
-            if status.get("ready"):
-                break
-            time.sleep(2)
-
-    _index = pc.Index(PINECONE_INDEX_NAME)
-    return _index
 
 
 def embed_texts(texts: list[str], input_type: str = "passage") -> list[list[float]]:

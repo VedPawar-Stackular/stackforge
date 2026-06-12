@@ -17,6 +17,7 @@ from pipeline.llm_utils import extract_usage, get_llm_client
 from pipeline.metrics_common import UsageTotals
 
 _logger = logging.getLogger(__name__)
+_VALID_PRIORITIES: frozenset[str] = frozenset({"high", "medium", "low"})
 
 _client = get_llm_client()
 
@@ -65,10 +66,10 @@ async def generate_clarifications(
             usage = UsageTotals().add(in_tok, out_tok, think_tok)
             try:
                 data = json.loads(response.choices[0].message.content)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                _logger.warning("Clarifier JSON parse failed (attempt %d): %s", attempt + 1, exc)
                 data = {}
             clarifications = data.get("clarifications", [])
-            _VALID_PRIORITIES = {"high", "medium", "low"}
             for c in clarifications:
                 if c.get("priority") not in _VALID_PRIORITIES:
                     _logger.warning(

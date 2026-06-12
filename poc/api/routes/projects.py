@@ -12,6 +12,7 @@ from api.routes import validate_project_id
 from db import DB
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+_logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ProjectResponse, status_code=201)
@@ -78,8 +79,8 @@ def delete_project(project_id: str):
         output_dir = get_output_dir(project_id)
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir)
-    except Exception:
-        pass  # file deletion failure must not block the 204 response
+    except Exception as e:
+        _logger.warning("Output dir cleanup failed for project %s: %s", project_id, e)
 
     return Response(status_code=204)
 
