@@ -65,13 +65,17 @@ async def ingest_document(
     file_bytes: bytes,
     filename: str,
     file_type: str,
+    doc_id: str | None = None,
 ) -> str:
     """
     Full pipeline for a single document. Returns document ID.
     Called by the FastAPI /documents upload endpoint.
+
+    When doc_id is provided the document row already exists (pre-created by the
+    API layer) so the INSERT is skipped. The "already done" check still runs for
+    idempotency.
     """
     content_hash = hashlib.sha256(file_bytes).hexdigest()
-    doc_id = str(uuid.uuid4())
 
     # ── Step 1: Check if this exact file was already processed ──────────────
     with DB() as db:
@@ -80,16 +84,18 @@ async def ingest_document(
             (project_id, content_hash),
         )
         if existing and existing["status"] == "done":
-            return existing["id"]  # skip re-processing unchanged document
+            return str(existing["id"])  # skip re-processing unchanged document
 
-        db.execute(
-            """
-            INSERT INTO documents (id, project_id, filename, file_type, content_hash, status)
-            VALUES (%s, %s, %s, %s, %s, 'processing')
-            ON CONFLICT DO NOTHING
-            """,
-            (doc_id, project_id, filename, file_type, content_hash),
-        )
+        if doc_id is None:
+            doc_id = str(uuid.uuid4())
+            db.execute(
+                """
+                INSERT INTO documents (id, project_id, filename, file_type, content_hash, status)
+                VALUES (%s, %s, %s, %s, %s, 'processing')
+                ON CONFLICT DO NOTHING
+                """,
+                (doc_id, project_id, filename, file_type, content_hash),
+            )
 
     try:
         # ── Step 1: Parse ────────────────────────────────────────────────────

@@ -4,14 +4,14 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ─── Projects / Clients ──────────────────────────────────────────────────────
 
 class CreateProjectRequest(BaseModel):
-    client_name: str
-    project_name: str
+    client_name: str = Field(..., min_length=1, max_length=200)
+    project_name: str = Field(..., min_length=1, max_length=200)
 
 
 class ProjectResponse(BaseModel):
@@ -68,13 +68,13 @@ class ClarificationResponse(BaseModel):
 
 
 class AnswerRequest(BaseModel):
-    answer: str
+    answer: str = Field(..., min_length=1, max_length=10_000)
 
 
 # ─── RAG Query ───────────────────────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1, max_length=2_000)
 
 
 class RagChunkResponse(BaseModel):
@@ -101,7 +101,7 @@ class DocContentResponse(BaseModel):
 
 
 class DocEditRequest(BaseModel):
-    instruction: str
+    instruction: str = Field(..., min_length=1, max_length=5_000)
 
 
 class DocEditResponse(BaseModel):
@@ -158,7 +158,7 @@ class MetricsStep(BaseModel):
     why_this_model: str
 
 
-class Stage2MetricsResponse(BaseModel):
+class PipelineMetricsResponse(BaseModel):
     actual_cost_usd: float
     naive_cost_usd: float
     savings_pct: float
@@ -171,18 +171,14 @@ class Stage2MetricsResponse(BaseModel):
     steps: list[MetricsStep]
 
 
-class Stage1MetricsResponse(BaseModel):
-    """Token-cost report for the Stage 1 ingestion pipeline (same shape as Stage 2)."""
-    actual_cost_usd: float
-    naive_cost_usd: float
-    savings_pct: float
-    tokens_saved: int
-    actual_input_tokens: int
-    actual_output_tokens: int
-    actual_thinking_tokens: int = 0
-    naive_input_tokens: int
-    naive_output_tokens: int
-    steps: list[MetricsStep]
+# Backwards-compatible aliases — both stages share the same report shape.
+Stage1MetricsResponse = PipelineMetricsResponse
+Stage2MetricsResponse = PipelineMetricsResponse
+
+
+class GenerationStartedResponse(BaseModel):
+    status: str
+    message: str
 
 
 class AdoPushResponse(BaseModel):

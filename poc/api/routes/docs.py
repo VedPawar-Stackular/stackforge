@@ -6,6 +6,7 @@ GET  /projects/{project_id}/docs/{topic}      — read one doc's markdown conten
 POST /projects/{project_id}/docs/{topic}/edit — apply a plain-English edit instruction
 """
 
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -16,10 +17,11 @@ from api.routes import validate_project_id
 from config import SDLC_TOPICS
 from pipeline.doc_writer import get_doc_path
 
-router = APIRouter()
+router = APIRouter(prefix="/projects/{project_id}/docs", tags=["docs"])
+_logger = logging.getLogger(__name__)
 
 
-@router.get("/projects/{project_id}/docs", response_model=list[DocMetaResponse])
+@router.get("", response_model=list[DocMetaResponse])
 def list_docs(project_id: str):
     """Return metadata for all 8 SDLC topic docs for this project."""
     validate_project_id(project_id)
@@ -46,7 +48,7 @@ def list_docs(project_id: str):
     return results
 
 
-@router.get("/projects/{project_id}/docs/{topic}", response_model=DocContentResponse)
+@router.get("/{topic}", response_model=DocContentResponse)
 def get_doc(project_id: str, topic: str):
     """Return the markdown content of a single SDLC topic doc."""
     validate_project_id(project_id)
@@ -68,7 +70,7 @@ def get_doc(project_id: str, topic: str):
     )
 
 
-@router.post("/projects/{project_id}/docs/{topic}/edit", response_model=DocEditResponse)
+@router.post("/{topic}/edit", response_model=DocEditResponse)
 async def edit_doc(project_id: str, topic: str, body: DocEditRequest):
     """Apply a plain-English edit instruction to the doc and return updated content."""
     validate_project_id(project_id)
@@ -83,6 +85,7 @@ async def edit_doc(project_id: str, topic: str, body: DocEditRequest):
     try:
         from pipeline.doc_editor import apply_edit
         updated = await apply_edit(project_id, topic, body.instruction)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Edit failed: {e}")
+    except Exception:
+        _logger.exception("Doc edit failed for project %s topic %s", project_id, topic)
+        raise HTTPException(status_code=500, detail="Edit failed. See server logs.")
     return DocEditResponse(topic=topic, content=updated)

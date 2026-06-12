@@ -5,6 +5,7 @@ POST /projects/{project_id}/stitch/generate  — trigger screen generation from 
 GET  /projects/{project_id}/stitch           — return status + screen list
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -16,12 +17,12 @@ from api.models import StitchGenerateResponse, StitchScreen, StitchStatusRespons
 from api.routes import validate_project_id
 from pipeline.doc_writer import get_output_dir
 
-router = APIRouter()
+router = APIRouter(prefix="/projects/{project_id}/stitch", tags=["stitch"])
 _logger = logging.getLogger(__name__)
 
 
-@router.post("/projects/{project_id}/stitch/generate", response_model=StitchGenerateResponse)
-async def generate_stitch(project_id: str, background_tasks: BackgroundTasks):
+@router.post("/generate", response_model=StitchGenerateResponse)
+def generate_stitch(project_id: str, background_tasks: BackgroundTasks):
     """
     Trigger Stitch UI screen generation from the project's design.md.
 
@@ -57,10 +58,10 @@ async def generate_stitch(project_id: str, background_tasks: BackgroundTasks):
     return StitchGenerateResponse(status="generating")
 
 
-async def _run_generation(project_id: str, flag_path: str, error_path: str) -> None:
+def _run_generation(project_id: str, flag_path: str, error_path: str) -> None:
     try:
         from pipeline.stitch_designer import generate_for_project
-        await generate_for_project(project_id)
+        asyncio.run(generate_for_project(project_id))
     except Exception as exc:
         _logger.error("Stitch generation failed for project %s: %s", project_id, exc)
         with open(error_path, "w", encoding="utf-8") as f:
@@ -70,7 +71,7 @@ async def _run_generation(project_id: str, flag_path: str, error_path: str) -> N
             os.remove(flag_path)
 
 
-@router.get("/projects/{project_id}/stitch", response_model=StitchStatusResponse)
+@router.get("", response_model=StitchStatusResponse)
 def get_stitch_status(project_id: str):
     """Return Stitch generation status and screen list for the project."""
     validate_project_id(project_id)

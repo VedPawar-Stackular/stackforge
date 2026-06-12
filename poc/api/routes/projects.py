@@ -1,5 +1,6 @@
 """Routes: project and client management."""
 
+import logging
 import os
 import shutil
 import uuid
@@ -87,26 +88,28 @@ def delete_project(project_id: str):
 
 @router.get("/{project_id}/status", response_model=ProjectStatusResponse)
 def get_project_status(project_id: str):
+    validate_project_id(project_id)
     with DB() as db:
         project = db.fetch_one("SELECT status FROM projects WHERE id = %s", (project_id,))
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        doc_count = db.fetch_one(
-            "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s", (project_id,)
-        )["n"]
-        ready_count = db.fetch_one(
-            "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s AND status = 'done'",
+        counts = db.fetch_one(
+            """
+            SELECT
+                COUNT(*)                                         AS total,
+                COUNT(*) FILTER (WHERE status = 'done')        AS ready,
+                COUNT(*) FILTER (WHERE status = 'failed')      AS failed,
+                COUNT(*) FILTER (WHERE status = 'processing')  AS processing
+            FROM documents WHERE project_id = %s
+            """,
             (project_id,),
-        )["n"]
-        failed_count = db.fetch_one(
-            "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s AND status = 'failed'",
-            (project_id,),
-        )["n"]
-        processing_count = db.fetch_one(
-            "SELECT COUNT(*) AS n FROM documents WHERE project_id = %s AND status = 'processing'",
-            (project_id,),
-        )["n"]
+        )
+        doc_count        = counts["total"]      if counts else 0
+        ready_count      = counts["ready"]      if counts else 0
+        failed_count     = counts["failed"]     if counts else 0
+        processing_count = counts["processing"] if counts else 0
+
         req_count = db.fetch_one(
             "SELECT COUNT(*) AS n FROM requirements WHERE project_id = %s", (project_id,)
         )["n"]
