@@ -1743,17 +1743,24 @@ with tab_epics:
                     _push_url += f"?area_path={_area_path}"
                 if st.button(ado_label, key="btn_push_ado", type=ado_type, use_container_width=True):
                     push_result = api_post(_push_url)
-                    if push_result:
-                        if push_result.get("status") == "pushing":
-                            # Background push started — counts not available yet
-                            st.info("ADO push started. Refresh the page in a moment to see updated status.")
-                        else:
-                            # Legacy sync response (future fallback)
-                            st.session_state["_ado_push_result"] = {
-                                "epics_pushed": push_result.get("epics_pushed", 0),
-                                "stories_pushed": push_result.get("stories_pushed", 0),
-                                "errors": push_result.get("errors", []),
-                            }
+                    if push_result is None:
+                        st.error(
+                            "Could not reach the API server. Make sure it is running: "
+                            "`python -m uvicorn api.main:app --reload`"
+                        )
+                    elif push_result.get("status") == "pushing":
+                        st.info("ADO push started in background. Refresh in a few seconds to see updated status.")
+                        invalidate_cache(
+                            f"/projects/{project_id}/stage2-status",
+                            f"/projects/{project_id}/epics",
+                        )
+                        st.rerun()
+                    else:
+                        st.session_state["_ado_push_result"] = {
+                            "epics_pushed": push_result.get("epics_pushed", 0),
+                            "stories_pushed": push_result.get("stories_pushed", 0),
+                            "errors": push_result.get("errors", []),
+                        }
                         invalidate_cache(
                             f"/projects/{project_id}/stage2-status",
                             f"/projects/{project_id}/epics",
