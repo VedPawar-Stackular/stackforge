@@ -7,12 +7,23 @@ load_dotenv()
 
 DATABASE_URL: str = os.environ["DATABASE_URL"]
 
-GROQ_API_KEY: str = os.environ["GROQ_API_KEY"]
-LLM_BASE_URL: str = "https://api.groq.com/openai/v1"
+GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
+OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
 
-# Model routing — matches production Haiku/Sonnet tier intent
-MODEL_CHEAP: str = "llama-3.1-8b-instant"      # summarisation, clarification, routing
-MODEL_CAPABLE: str = "llama-3.3-70b-versatile"  # structured requirement extraction
+# Set LLM_PROVIDER=groq or LLM_PROVIDER=openrouter in .env to switch providers
+LLM_PROVIDER: str = os.environ.get("LLM_PROVIDER", "groq")
+
+if LLM_PROVIDER == "openrouter":
+    LLM_API_KEY: str = OPENROUTER_API_KEY
+    LLM_BASE_URL: str = "https://openrouter.ai/api/v1"
+    # Override via .env; defaults map to haiku/sonnet tier equivalents
+    MODEL_CHEAP: str = os.environ.get("OPENROUTER_MODEL_CHEAP", "meta-llama/llama-3.1-8b-instruct:free")
+    MODEL_CAPABLE: str = os.environ.get("OPENROUTER_MODEL_CAPABLE", "meta-llama/llama-3.3-70b-instruct")
+else:  # groq
+    LLM_API_KEY = GROQ_API_KEY
+    LLM_BASE_URL = "https://api.groq.com/openai/v1"
+    MODEL_CHEAP = "llama-3.1-8b-instant"
+    MODEL_CAPABLE = "llama-3.3-70b-versatile"
 
 # Chunking
 CHUNK_TARGET_WORDS: int = 275  # target ~250-300 words per chunk

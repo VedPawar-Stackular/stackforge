@@ -65,8 +65,11 @@ These are non-negotiable across the entire codebase. Every AI call must comply.
 - Chunk size: 250–300 words at natural boundaries (paragraphs, section headers).
 - Cache processed document extractions immediately after first use. Never re-process an unchanged document.
 - **Chunk overlap:** 35-word tail overlap between adjacent chunks (sliding window). Implemented — `CHUNK_OVERLAP_WORDS = 35` in `config.py`, applied in `chunker.py`.
+- **Cross-doc dedup:** After extraction, a BM25 similarity pass within `runner.py` marks near-duplicate requirements as `status='duplicate'`. Stage 2 queries only `status='active'` requirements.
+- **Token metrics recorded:** Every LLM call in Stage 1 (summarization, extraction, clarification) writes to `stage1_metrics` table via `poc/pipeline/stage1_metrics_calculator.record_step()`. Report available via `GET /projects/{id}/stage1-metrics`. Mirrors Stage 2's metrics shape — same `UsageTotals` dataclass from `metrics_common.py`, same terminal renderer from `metrics_terminal.py`.
+- **Clarification Q&A embedding:** When a user submits an answer to a clarification question, `embedder.embed_clarification()` stores the Q&A pair in the RAG store (BM25 + Pinecone). Future queries on the project can retrieve these answered constraints.
 
-**POC status: built and validated.** See `poc/` directory. Ran against real CareFlow client documents (SOW, FRS, meeting transcript) — extracted 130 requirements across 4 types and generated 18 clarification questions. End-to-end pipeline takes ~2 minutes per project.
+**POC status: built and validated.** See `poc/` directory. Ran against MediBook Apex Health sample documents — SOW, BRD, Technical Spec, email, transcript. End-to-end pipeline takes ~2 minutes per project.
 
 ### Stage 2 — Epic & User Story Generation
 
@@ -278,14 +281,18 @@ These are confirmed architectural problems that need to be fixed. Do not impleme
 
 ### POC-specific decisions (all stages)
 
-- **LLM provider: Groq (free tier)** — `llama-3.1-8b-instant` maps to haiku tier; `llama-3.3-70b-versatile` maps to sonnet tier. Uses `openai` SDK with `base_url="https://api.groq.com/openai/v1"`. Switching to Anthropic API = change base URL + model name strings only, no architecture changes.
+- **LLM provider: Groq (default) or OpenRouter** — Set `LLM_PROVIDER=groq` (default) or `LLM_PROVIDER=openrouter` in `poc/.env`. Groq: `llama-3.1-8b-instant` (haiku tier), `llama-3.3-70b-versatile` (sonnet tier), `GROQ_API_KEY`. OpenRouter: `meta-llama/llama-3.1-8b-instruct:free` (haiku tier), `meta-llama/llama-3.3-70b-instruct` (sonnet tier), `OPENROUTER_API_KEY`. Both use the `openai` SDK — switching providers = change one env var. Switching to Anthropic = change base URL + model names only.
+- **LLM client factory: `llm_utils.py`** — All pipeline modules import `get_llm_client()`, `call_with_retry()`, and `extract_usage()` from `poc/pipeline/llm_utils.py`. Never instantiate `AsyncOpenAI` directly in pipeline modules. `extract_usage()` reads `thinking_tokens` from `completion_tokens_details.reasoning_tokens` (0 for current Groq models; auto-populates if a reasoning model is wired later).
 - **Database adapter: `pg8000`** — Pure Python PostgreSQL adapter. `psycopg2-binary` has no Python 3.14 wheels and cannot be built without pg_config on Windows. Do not switch back.
 - **Local vector search: disabled** — `sentence-transformers` requires `torch`/`torchvision` which have no Python 3.14 wheels. BM25 keyword search (`rank_bm25`) is used as baseline. Re-enable local embeddings when Python 3.14 torch wheels are available.
 - **Pinecone (optional):** Set `PINECONE_API_KEY` in `poc/.env` to enable semantic search alongside BM25. Uses `multilingual-e5-large` (1024-dim) via Pinecone Inference — no local model download required. Falls back to BM25-only if key is absent. See `poc/rag/pinecone_client.py`.
 - **Async concurrency: `asyncio.Semaphore(5)`** — Groq free tier caps at 30 req/min. Semaphore limits concurrent LLM calls to 5. Includes exponential backoff retry on 429 errors. `asyncio.Semaphore` is created inside async functions (not module-level) to avoid event loop ownership issues when called via `asyncio.run()` in FastAPI background threads.
 - **UUID array inserts:** `pg8000` cannot auto-cast Python lists to PostgreSQL `UUID[]` columns. Use string literal format `"{uuid}"` with `%s::uuid[]` cast in all SQL that writes to `source_document_ids`. This pattern is in `poc/pipeline/runner.py` and `poc/run_demo.py`.
-- **TEXT[] acceptance criteria:** `pg8000` can't auto-cast Python lists to `TEXT[]`. Use `_text_array_literal()` helper in `stage2_runner.py` for all AC inserts.
+- **TEXT[] columns:** `pg8000` can't auto-cast Python lists to `TEXT[]`. Use `text_array_literal()` from `poc/pipeline/utils.py` for all TEXT[] inserts (acceptance criteria, `key_specifics`, etc.). Formerly `_text_array_literal()` in `stage2_runner.py` — now shared.
 - **ADO push is sync:** `httpx.Client` used in `ado_client.py`, called directly from sync FastAPI route. Do not convert to async without confirming the route stays sync.
+- **`requirements` table additions:** Two columns added via `poc/db/migrate_key_specifics.py`: `key_specifics TEXT[] DEFAULT '{}'` (verbatim measurements, time limits, field names extracted per requirement — carries specific client language into story ACs) and `status TEXT DEFAULT 'active'` ('active' | 'duplicate' — cross-doc dedup pass in `runner.py` marks duplicates; Stage 2 skips them).
+- **`thinking_tokens` on metrics tables:** Both `stage1_metrics` and `stage2_metrics` track `thinking_tokens`. Populated from `completion_tokens_details.reasoning_tokens`. Always 0 for current Groq llama models; ready for reasoning models without schema changes.
+- **Path traversal guard:** `poc/api/routes/__init__.py` exports `validate_project_id()`. Call it at the start of any route that uses `project_id` to construct a filesystem path. Rejects non-UUID strings with HTTP 400.
 
 ---
 
@@ -305,30 +312,43 @@ These are confirmed architectural problems that need to be fixed. Do not impleme
 ```
 poc/
 ├── requirements.txt          # All deps unpinned (>=) for Python 3.14 compat
-├── .env                      # GROQ_API_KEY, DATABASE_URL, ADO_*, STITCH_API_KEY, PINECONE_* (not committed)
-├── config.py                 # Shared config — model names, chunk size, BM25/rerank top-k, ADO, Pinecone, Stitch, pricing
+├── .env                      # GROQ_API_KEY, OPENROUTER_API_KEY, LLM_PROVIDER, DATABASE_URL,
+│                             # ADO_*, STITCH_API_KEY, PINECONE_* (not committed)
+├── config.py                 # Shared config — LLM provider/model names, chunk size, BM25/rerank top-k,
+│                             # ADO, Pinecone, Stitch, Anthropic pricing, MODEL_TIER map
 ├── db.py                     # pg8000 DB context manager (cursor must be closed manually — no `with cursor()`)
-├── run_demo.py               # CLI runner: full pipeline + rich terminal output
+├── run_demo.py               # CLI runner: full pipeline + rich terminal output (uses metrics_terminal.py)
 ├── db/
 │   ├── init.sql              # Schema: clients, projects, documents, doc_chunks, requirements, clarifications, rag_chunks
 │   ├── stage2.sql            # Stage 2 schema: epics, user_stories, stage2_metrics + stage2_status on projects
+│   ├── stage1_metrics.sql    # Stage 1 metrics schema: stage1_metrics table + thinking_tokens on stage2_metrics
 │   ├── seed.py               # Creates demo client/project; writes sample docs to sample_docs/
-│   └── migrate_stage2.py     # One-time migration to apply stage2.sql
+│   ├── migrate_stage2.py     # One-time migration to apply stage2.sql
+│   ├── migrate_metrics.py    # One-time migration to apply stage1_metrics.sql
+│   └── migrate_key_specifics.py  # One-time migration: adds key_specifics + status cols to requirements
 ├── pipeline/
+│   ├── llm_utils.py          # LLM client factory + retry: get_llm_client(), call_with_retry(), extract_usage()
+│   │                         # Single import point for all pipeline LLM calls — do not instantiate AsyncOpenAI directly
+│   ├── utils.py              # Shared pipeline helpers: get_project_name(), text_array_literal()
+│   ├── metrics_common.py     # Shared cost math: UsageTotals dataclass, step_cost(), opus_reprice(), tier_for_model()
+│   ├── metrics_terminal.py   # Rich terminal renderer for stage metrics reports (Stage 1 and Stage 2)
 │   ├── parser.py             # PDF (pdfplumber) / DOCX (python-docx) / TXT → plain text
 │   ├── chunker.py            # ~275-word chunks at paragraph boundaries; 35-word overlap between chunks
 │   ├── summarizer.py         # Cheap model parallel summarisation with semaphore + retry
-│   ├── extractor.py          # Capable model: summaries → structured requirements JSON
-│   ├── embedder.py           # Stores text in rag_chunks; embedding column left NULL (local vector search disabled)
+│   ├── extractor.py          # Capable model: summaries → structured requirements JSON (batched, EXTRACTOR_BATCH_SIZE=10)
+│   ├── embedder.py           # BM25 + Pinecone upsert: embed_chunk_summaries(), embed_requirements(),
+│   │                         # embed_clarification() (Q&A pair embedded on answer submit)
 │   ├── clarifier.py          # Cheap model: requirements → clarification questions JSON
-│   ├── runner.py             # Stage 1 orchestration; called by FastAPI background task
+│   ├── runner.py             # Stage 1 orchestration: parse → chunk → summarize → extract → dedup → embed → clarify
+│   │                         # Records metrics per step via stage1_metrics_calculator.record_step()
+│   ├── stage1_metrics_calculator.py  # Stage 1 token recording + savings report (record_step, get_report)
 │   ├── doc_writer.py         # Writes SDLC topic .md files to poc/output/{project_id}/ (no LLM)
 │   ├── doc_editor.py         # Incremental edits to existing SDLC topic files
 │   ├── epic_generator.py     # Stage 2 step 1: cheap model, requirement titles only → epic themes JSON
 │   ├── story_generator.py    # Stage 2 step 2: mid model, per-epic scoped context, parallel via asyncio.gather
 │   ├── stage2_runner.py      # Stage 2 orchestration: epic gen → story gen → DB insert → optional ADO push
 │   ├── ado_client.py         # ADO REST API v7.1: create Epic/User Story, auto-create area path
-│   ├── metrics_calculator.py # Actual vs naive cost comparison at Anthropic pricing rates
+│   ├── metrics_calculator.py # Stage 2 actual vs naive cost comparison at Anthropic pricing rates
 │   ├── stitch_designer.py    # Google Stitch MCP: extract screens → create project → generate HTML screens
 │   └── workspace_prep.py     # Multica workspace prep: inject Stitch design assets before agent spawns
 ├── rag/
@@ -337,14 +357,16 @@ poc/
 │   └── pinecone_client.py    # Pinecone index creation + upsert + query (enabled via PINECONE_API_KEY)
 ├── api/
 │   ├── main.py               # FastAPI app with CORS; mounts all routers
-│   ├── models.py             # Pydantic request/response schemas
+│   ├── models.py             # Pydantic request/response schemas (includes Stage1MetricsResponse)
 │   └── routes/
+│       ├── __init__.py       # validate_project_id() — call at start of any route using project_id in fs paths
 │       ├── projects.py       # CRUD: clients + projects
 │       ├── documents.py      # File upload → pipeline via BackgroundTasks
 │       ├── requirements.py   # List requirements by project
-│       ├── clarifications.py # List Qs, submit answers
+│       ├── clarifications.py # List Qs, submit answers (triggers embed_clarification on answer submit)
 │       ├── docs.py           # SDLC document read/edit endpoints
 │       ├── epics.py          # Stage 2: generate, status, list epics/stories, push to ADO, metrics
+│       ├── metrics.py        # GET /projects/{id}/stage1-metrics — Stage 1 token savings report
 │       └── stitch.py         # Stitch: trigger design gen, get status, list screens
 ├── scripts/
 │   ├── ado_bulk_delete.py    # Bulk delete ADO work items (dev/demo cleanup utility)
@@ -373,17 +395,23 @@ poc/
 # 1. Start database
 docker start stackforge-db
 
-# 2. From poc/ directory — terminal demo (Stage 1 only)
+# 2. Apply any pending migrations (first time or after pulling)
+cd poc
+python db/migrate_stage2.py
+python db/migrate_metrics.py
+python db/migrate_key_specifics.py
+
+# 3. From poc/ directory — terminal demo (Stage 1 only)
 python run_demo.py
 
-# 3. API server
+# 4. API server
 python -m uvicorn api.main:app --reload
 
-# 4. Streamlit UI (separate terminal)
+# 5. Streamlit UI (separate terminal)
 python -m streamlit run ui/app.py
 ```
 
-**Sample client documents** are in `sample_client_docs/` at the repo root (CareFlow HIPAA telehealth platform). Use these for demos.
+**Sample client documents** are in `sample_client_docs/` at the repo root (MediBook Apex Health platform — SOW, BRD, Technical Spec, client email, discovery transcript). Use these for demos.
 
 ---
 
