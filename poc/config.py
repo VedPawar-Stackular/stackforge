@@ -85,6 +85,12 @@ MODEL_TIER: dict = {
     MODEL_CAPABLE: "sonnet",  # llama-3.3-70b-versatile → sonnet tier
 }
 
+# ── Stage 3: Sprint & Task Planning ──────────────────────────────────────────
+# Default sprint capacity in story points. Can be overridden per-project via
+# the API (generate-sprints?sprint_capacity=N).
+SPRINT_CAPACITY_DEFAULT: int = 20
+SPRINT_DURATION_WEEKS: int = 2
+
 # SDLC topic taxonomy used for requirement classification
 SDLC_TOPICS: list[str] = [
     "requirements",     # functional requirements, features, user needs, scope

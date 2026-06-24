@@ -191,6 +191,62 @@ class AdoPushResponse(BaseModel):
     errors: list[str]
 
 
+# ─── Stage 3: Sprint & Task Planning ─────────────────────────────────────────
+
+class SprintResponse(BaseModel):
+    id: UUID
+    sprint_number: int
+    name: str
+    capacity_points: int
+    total_points: int
+    story_count: int
+    task_count: int
+    status: str
+    created_at: datetime
+
+
+class TaskResponse(BaseModel):
+    id: UUID
+    story_id: UUID
+    title: str
+    description: str
+    task_type: str
+    estimated_hours: float
+    assignee: Optional[str] = None
+    status: str
+    created_at: datetime
+
+
+class SprintStoryResponse(BaseModel):
+    """User story with its tasks, nested inside a sprint view."""
+    id: UUID
+    epic_id: UUID
+    title: str
+    description: str
+    story_points: Optional[int]
+    tasks: list[TaskResponse]
+
+
+class Stage3StatusResponse(BaseModel):
+    status: str           # idle | generating | ready | failed
+    sprint_count: int
+    task_count: int
+    total_stories_planned: int
+
+
+class Stage3MetricsResponse(BaseModel):
+    actual_cost_usd: float
+    naive_cost_usd: float
+    savings_pct: float
+    tokens_saved: int
+    actual_input_tokens: int
+    actual_output_tokens: int
+    actual_thinking_tokens: int = 0
+    naive_input_tokens: int
+    naive_output_tokens: int
+    steps: list[MetricsStep]
+
+
 # ─── Google Stitch ────────────────────────────────────────────────────────────
 
 class StitchGenerateResponse(BaseModel):

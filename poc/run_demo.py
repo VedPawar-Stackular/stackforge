@@ -306,6 +306,132 @@ async def run(client_name: str, project_name: str, doc_paths: list[str]) -> None
     except Exception as e:
         console.print(f"  [yellow]⚠ Stage 2 skipped:[/] {e}")
 
+    # ── Stage 3: Sprint & Task Planning ───────────────────────────────────────
+    console.print()
+    console.rule("[bold cyan]Stage 3 — Sprint & Task Planning[/]")
+    try:
+        from pipeline.stage3_metrics_calculator import get_metrics_report as get_stage3_report
+        from pipeline.stage3_runner import run_stage3
+        from db import DB as _DB
+
+        with console.status("  [cyan]Assigning stories to sprints and generating tasks…[/]"):
+            stage3_result = await run_stage3(project_id)
+
+        sprint_count = stage3_result.get("sprint_count", 0)
+        task_count = stage3_result.get("task_count", 0)
+        console.print(
+            f"  [green]✓[/] {sprint_count} sprints, {task_count} tasks generated"
+        )
+        console.print()
+
+        # ── Sprint plan table ─────────────────────────────────────────────────
+        from rich.table import Table
+
+        sprint_rows = []
+        with _DB() as db:
+            sprint_rows = db.fetch_all(
+                "SELECT sprint_number, name, total_points, capacity_points FROM sprints "
+                "WHERE project_id = %s ORDER BY sprint_number",
+                (project_id,),
+            )
+            story_counts = db.fetch_all(
+                "SELECT sprint_id, COUNT(*) AS cnt FROM sprint_stories "
+                "WHERE project_id = %s GROUP BY sprint_id",
+                (project_id,),
+            )
+            # Map sprint_id → story count
+            sprint_id_rows = db.fetch_all(
+                "SELECT id, sprint_number FROM sprints WHERE project_id = %s",
+                (project_id,),
+            )
+
+        sprint_id_map = {str(r["id"]): r["sprint_number"] for r in sprint_id_rows}
+        sc_by_num = {
+            sprint_id_map.get(str(r["sprint_id"])): int(r["cnt"])
+            for r in story_counts
+            if str(r["sprint_id"]) in sprint_id_map
+        }
+
+        tbl = Table(
+            title="Sprint Plan",
+            border_style="dim",
+            header_style="bold cyan",
+            show_lines=False,
+        )
+        tbl.add_column("Sprint", style="bold white", width=10)
+        tbl.add_column("Stories", justify="center", width=8)
+        tbl.add_column("Points", justify="center", width=8)
+        tbl.add_column("Capacity", justify="center", width=10)
+        tbl.add_column("Utilisation", width=28)
+
+        for row in sprint_rows:
+            num = row["sprint_number"]
+            used = row["total_points"]
+            cap = row["capacity_points"]
+            stories = sc_by_num.get(num, 0)
+            pct = round(used / cap * 100) if cap else 0
+            bar_filled = int(pct / 5)
+            bar = "[green]" + "█" * bar_filled + "[/][dim]" + "░" * (20 - bar_filled) + "[/]"
+            util_str = f"{bar} {pct}%"
+            tbl.add_row(row["name"], str(stories), str(used), str(cap), util_str)
+
+        console.print(tbl)
+        console.print()
+
+        # ── Sample task breakdown (first sprint only) ─────────────────────────
+        if sprint_rows:
+            first_sprint_id = None
+            with _DB() as db:
+                first_sprint = db.fetch_one(
+                    "SELECT id FROM sprints WHERE project_id = %s ORDER BY sprint_number LIMIT 1",
+                    (project_id,),
+                )
+                if first_sprint:
+                    first_sprint_id = str(first_sprint["id"])
+                    sample_stories = db.fetch_all(
+                        """
+                        SELECT us.title, us.story_points,
+                               t.title as task_title, t.task_type, t.estimated_hours
+                        FROM sprint_stories ss
+                        JOIN user_stories us ON us.id = ss.story_id
+                        LEFT JOIN tasks t ON t.story_id = ss.story_id
+                        WHERE ss.sprint_id = %s
+                        ORDER BY ss.priority_order, t.task_type, t.created_at
+                        """,
+                        (first_sprint_id,),
+                    )
+
+            if first_sprint_id and sample_stories:
+                console.print("[bold]Sample Task Breakdown — Sprint 1[/]")
+                current_story = None
+                TASK_TYPE_COLOR = {
+                    "backend": "blue", "frontend": "violet", "testing": "red",
+                    "devops": "green", "design": "yellow", "documentation": "white",
+                }
+                for row in sample_stories:
+                    if row["title"] != current_story:
+                        current_story = row["title"]
+                        pts = row.get("story_points") or "?"
+                        console.print(
+                            f"\n  [bold white]{current_story}[/] "
+                            f"[dim]({pts} pts)[/]"
+                        )
+                    if row.get("task_title"):
+                        tt = row.get("task_type", "backend")
+                        color = TASK_TYPE_COLOR.get(tt, "white")
+                        hrs = row.get("estimated_hours", 0)
+                        hrs_str = f"{int(hrs)}h" if hrs == int(hrs) else f"{hrs}h"
+                        console.print(
+                            f"    [dim]├─[/] [{color}][{tt}][/{color}]  "
+                            f"{row['task_title']}  [dim]({hrs_str})[/]"
+                        )
+                console.print()
+
+        render_stage_metrics(console, get_stage3_report(project_id), "Stage 3 — Sprint & Tasks")
+
+    except Exception as e:
+        console.print(f"  [yellow]⚠ Stage 3 skipped:[/] {e}")
+
     # Write SDLC docs
     try:
         from pipeline.doc_writer import write_sdlc_docs

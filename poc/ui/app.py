@@ -702,6 +702,16 @@ STAGE2_OPTIMIZATIONS = [
 ]
 
 
+STAGE3_OPTIMIZATIONS = [
+    ("Zero LLM for sprint packing", "Rule-based bin-packing assigns stories to sprints — 0 tokens, $0 cost.", "teal"),
+    ("Capable model only (not Opus)", "Task decomposition uses Sonnet-tier — ~5-10x cheaper than Opus for structured output.", "blue"),
+    ("Parallel task generation", "All stories run simultaneously via asyncio.gather — wall-clock ≈ 1 call regardless of story count.", "violet"),
+    ("Context scoped per story", "Each call receives ~1 story (~300 tokens), not the full backlog (~15K tokens). 96% input reduction.", "blue"),
+    ("RAG context injection", "Top-3 similar past chunks retrieved via BM25 — no full history sent, estimation stays calibrated.", "amber"),
+    ("JSON schema + max_tokens cap", "Structured output eliminates prose bloat — ~40% fewer output tokens vs free-form generation.", "slate"),
+]
+
+
 def render_status_badge(status: str) -> str:
     cls = {
         "done": "teal", "ready": "teal",
@@ -748,13 +758,14 @@ render_hero()
 
 # ─── Tab layout ───────────────────────────────────────────────────────────────
 
-tab_setup, tab_upload, tab_review, tab_docs, tab_clarify, tab_epics = st.tabs([
+tab_setup, tab_upload, tab_review, tab_docs, tab_clarify, tab_epics, tab_sprints = st.tabs([
     "🏗️  Setup",
     "📂  Upload",
     "📋  Requirements",
     "📄  Documents",
     "💬  Clarifications",
     "🗂️  Epics & Stories",
+    "🏃  Sprint Plan",
 ])
 
 
@@ -1872,4 +1883,242 @@ with tab_epics:
             render_metrics_panel(
                 metrics, STAGE2_OPTIMIZATIONS,
                 "vs naive all-Opus monolithic approach",
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tab 7: Sprint Plan
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TASK_TYPE_META = {
+    "backend":       ("⚙️",  "#4f8ef7"),
+    "frontend":      ("🖥️",  "#a78bfa"),
+    "testing":       ("🧪", "#f87171"),
+    "devops":        ("🔧", "#34d399"),
+    "design":        ("🎨", "#fb923c"),
+    "documentation": ("📝", "#94a3b8"),
+}
+
+with tab_sprints:
+    st.markdown('<div class="sf-section-header">Sprint & Task Planning</div>', unsafe_allow_html=True)
+    st.caption("AI-generated sprint plan and task breakdown from Stage 2 user stories.")
+
+    project_id = st.session_state.get("project_id")
+    if not project_id:
+        st.info("Select or create a project in the Setup tab first.")
+    else:
+        s3 = cached_get(f"/projects/{project_id}/stage3-status") or {}
+        s3_status = s3.get("status", "idle")
+        sprint_count = s3.get("sprint_count", 0)
+        task_count = s3.get("task_count", 0)
+        stories_planned = s3.get("total_stories_planned", 0)
+
+        # ── Action bar ────────────────────────────────────────────────────────
+        top_left, top_right = st.columns([3, 1])
+        with top_right:
+            with st.expander("⚙️ Config"):
+                sprint_cap = st.slider(
+                    "Sprint capacity (pts)", min_value=5, max_value=60,
+                    value=20, step=5,
+                    help="Team velocity in story points per sprint",
+                )
+
+            if s3_status in ("idle", "failed"):
+                btn_label = "⚡ Generate Sprint Plan"
+            else:
+                btn_label = "🔄 Regenerate"
+
+            if st.button(btn_label, key="btn_s3_generate", type="primary", use_container_width=True):
+                result = api_post(
+                    f"/projects/{project_id}/generate-sprints?sprint_capacity={sprint_cap}",
+                )
+                if result:
+                    invalidate_cache(
+                        f"/projects/{project_id}/stage3-status",
+                        f"/projects/{project_id}/sprints",
+                        f"/projects/{project_id}/stage3-metrics",
+                    )
+                    st.rerun()
+
+            if s3_status == "generating":
+                if st.button("↻ Refresh", key="btn_s3_refresh", use_container_width=True):
+                    invalidate_cache(
+                        f"/projects/{project_id}/stage3-status",
+                        f"/projects/{project_id}/sprints",
+                    )
+                    st.rerun()
+
+        with top_left:
+            m1, m2, m3, m4 = st.columns(4)
+            status_color = {
+                "ready": "#00d4aa", "generating": "#4f8ef7",
+                "failed": "#f43f5e", "idle": "#4a5070",
+            }.get(s3_status, "#4a5070")
+            m1.markdown(
+                f'<div class="sf-metric">'
+                f'  <div class="sf-metric-value" style="color:{status_color};font-size:1rem;">'
+                f'    {s3_status.upper()}'
+                f'  </div>'
+                f'  <div class="sf-metric-label">Status</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            m2.markdown(
+                f'<div class="sf-metric">'
+                f'  <div class="sf-metric-value">{sprint_count}</div>'
+                f'  <div class="sf-metric-label">Sprints</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            m3.markdown(
+                f'<div class="sf-metric">'
+                f'  <div class="sf-metric-value">{stories_planned}</div>'
+                f'  <div class="sf-metric-label">Stories Planned</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            m4.markdown(
+                f'<div class="sf-metric">'
+                f'  <div class="sf-metric-value">{task_count}</div>'
+                f'  <div class="sf-metric-label">Total Tasks</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if s3_status == "generating":
+            st.markdown(
+                '<div style="margin-top:12px;padding:12px 16px;background:#1a1d2e;'
+                'border:1px solid #2e3250;border-radius:10px;color:#4f8ef7;font-size:0.85rem;">'
+                '⏳ Generating sprint plan and task breakdown in background… click Refresh to check progress.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+        elif s3_status == "failed":
+            st.error("Stage 3 generation failed. Check the API server logs, then try regenerating.")
+
+        elif s3_status == "ready" and sprint_count > 0:
+            sprints_data = cached_get(f"/projects/{project_id}/sprints") or []
+
+            # ── Sprint capacity utilisation chart ─────────────────────────
+            if sprints_data:
+                import plotly.graph_objects as go  # noqa: PLC0415
+
+                st.divider()
+                sprint_names = [s["name"] for s in sprints_data]
+                used_pts = [s["total_points"] for s in sprints_data]
+                cap_pts = [s["capacity_points"] for s in sprints_data]
+                pct = [round(u / c * 100) if c else 0 for u, c in zip(used_pts, cap_pts)]
+
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    name="Used",
+                    x=sprint_names,
+                    y=used_pts,
+                    marker_color="#4f8ef7",
+                    text=[f"{p}%" for p in pct],
+                    textposition="outside",
+                ))
+                fig.add_trace(go.Bar(
+                    name="Remaining",
+                    x=sprint_names,
+                    y=[max(0, c - u) for c, u in zip(cap_pts, used_pts)],
+                    marker_color="#2e3250",
+                ))
+                fig.update_layout(
+                    barmode="stack",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#e8eaf0",
+                    height=220,
+                    margin=dict(l=0, r=0, t=24, b=0),
+                    showlegend=True,
+                    legend=dict(
+                        orientation="h", yanchor="bottom", y=1.02,
+                        xanchor="right", x=1, font=dict(size=11),
+                    ),
+                    xaxis=dict(gridcolor="#2e3250"),
+                    yaxis=dict(gridcolor="#2e3250", title="Story Points"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            # ── Sprint accordions ──────────────────────────────────────────
+            st.markdown('<div class="sf-section-header">Sprint Breakdown</div>', unsafe_allow_html=True)
+
+            for sprint in sprints_data:
+                sprint_id = str(sprint["id"])
+                util_pct = round(sprint["total_points"] / sprint["capacity_points"] * 100) if sprint["capacity_points"] else 0
+                util_color = "#f43f5e" if util_pct > 100 else ("#f59e0b" if util_pct > 85 else "#00d4aa")
+
+                with st.expander(
+                    f"{sprint['name']}  —  "
+                    f"{sprint['total_points']}/{sprint['capacity_points']} pts  ·  "
+                    f"{sprint['story_count']} stories  ·  {sprint['task_count']} tasks",
+                    expanded=(sprint["sprint_number"] == 1),
+                ):
+                    # Utilisation bar
+                    st.markdown(
+                        f'<div style="margin-bottom:12px;">'
+                        f'  <div style="font-size:0.72rem;color:#8b92a5;margin-bottom:4px;">'
+                        f'    Capacity utilisation: <span style="color:{util_color};font-weight:600;">{util_pct}%</span>'
+                        f'  </div>'
+                        f'  <div style="background:#2e3250;border-radius:4px;height:6px;overflow:hidden;">'
+                        f'    <div style="background:{util_color};width:{min(util_pct,100)}%;height:100%;'
+                        f'         border-radius:4px;transition:width 0.3s;"></div>'
+                        f'  </div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    sprint_stories_data = cached_get(
+                        f"/projects/{project_id}/sprints/{sprint_id}/stories"
+                    ) or []
+
+                    for story in sprint_stories_data:
+                        pts = story.get("story_points")
+                        pts_badge = (
+                            f'<span class="sf-badge sf-badge-blue" style="margin-left:6px;">{pts} pts</span>'
+                            if pts else ""
+                        )
+                        tasks = story.get("tasks", [])
+
+                        # Build task chips
+                        task_chips = ""
+                        for task in tasks:
+                            tt = task.get("task_type", "backend")
+                            icon, color = TASK_TYPE_META.get(tt, ("⚙️", "#4f8ef7"))
+                            hrs = task.get("estimated_hours", 0)
+                            hrs_str = f"{int(hrs)}h" if hrs == int(hrs) else f"{hrs}h"
+                            task_chips += (
+                                f'<div style="display:inline-flex;align-items:center;gap:4px;'
+                                f'     background:rgba(255,255,255,0.04);border:1px solid #2e3250;'
+                                f'     border-radius:6px;padding:3px 8px;margin:2px;font-size:0.72rem;">'
+                                f'  <span style="color:{color};">{icon}</span>'
+                                f'  <span style="color:#e8eaf0;">{task["title"]}</span>'
+                                f'  <span style="color:#4a5070;">·</span>'
+                                f'  <span style="color:#8b92a5;">{hrs_str}</span>'
+                                f'</div>'
+                            )
+
+                        st.markdown(
+                            f'<div class="sf-card" style="margin-bottom:8px;">'
+                            f'  <div style="display:flex;align-items:center;margin-bottom:6px;">'
+                            f'    <span style="font-size:0.88rem;font-weight:500;color:#e8eaf0;">'
+                            f'      {story["title"]}'
+                            f'    </span>'
+                            f'    {pts_badge}'
+                            f'  </div>'
+                            f'  <div style="display:flex;flex-wrap:wrap;gap:2px;">{task_chips}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+
+            # ── Token cost report ──────────────────────────────────────────
+            st.divider()
+            st.markdown('<div class="sf-section-header">Token Cost Optimization Report</div>', unsafe_allow_html=True)
+
+            s3_metrics = cached_get(f"/projects/{project_id}/stage3-metrics")
+            render_metrics_panel(
+                s3_metrics, STAGE3_OPTIMIZATIONS,
+                "vs naive all-Opus approach (no routing, no scoping)",
             )
