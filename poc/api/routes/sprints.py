@@ -8,13 +8,16 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from api.models import (
     SprintResponse,
     SprintStoryResponse,
+    Stage3AdoPushResponse,
     Stage3MetricsResponse,
     Stage3StatusResponse,
     TaskResponse,
 )
 from api.routes import validate_project_id
+from config import ADO_ORG, ADO_PAT, ADO_PROJECT
 from db import DB
 from pipeline.stage3_metrics_calculator import get_metrics_report
+from pipeline.stage3_runner import push_to_ado_stage3 as _push_to_ado_stage3
 from pipeline.stage3_runner import run_stage3
 
 _logger = logging.getLogger(__name__)
@@ -86,13 +89,76 @@ def get_stage3_status(project_id: str):
         planned_row = db.fetch_one(
             "SELECT COUNT(*) AS cnt FROM sprint_stories WHERE project_id = %s", (project_id,)
         )
+        ado_row = db.fetch_one(
+            "SELECT COUNT(*) AS cnt FROM tasks WHERE project_id = %s AND ado_work_item_id IS NOT NULL",
+            (project_id,),
+        )
 
     return {
         "status": project.get("stage3_status", "idle"),
         "sprint_count": int(sprint_row["cnt"]) if sprint_row else 0,
         "task_count": int(task_row["cnt"]) if task_row else 0,
         "total_stories_planned": int(planned_row["cnt"]) if planned_row else 0,
+        "ado_pushed": int(ado_row["cnt"]) > 0 if ado_row else False,
     }
+
+
+@router.post("/push-sprints-to-ado", status_code=202)
+def push_sprints_to_ado(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    area_path: str = Query(
+        "",
+        description=(
+            "ADO sub-area for this project. StackForge will try to create it if it doesn't exist. "
+            "Leave empty to fall back to the ADO project default area."
+        ),
+    ),
+):
+    """
+    Push all sprints (as ADO Iterations) and tasks (as ADO Task work items) to ADO.
+    Runs in background — poll /stage3-status for ado_pushed completion.
+    Requires ADO_ORG, ADO_PROJECT, ADO_PAT in poc/.env.
+    """
+    validate_project_id(project_id)
+
+    with DB() as db:
+        if not db.fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,)):
+            raise HTTPException(status_code=404, detail="Project not found")
+        task_row = db.fetch_one(
+            "SELECT COUNT(*) AS cnt FROM tasks WHERE project_id = %s", (project_id,)
+        )
+        if not task_row or int(task_row["cnt"]) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No tasks found — run Stage 3 (Generate Sprint Plan) first",
+            )
+
+    if not all([ADO_ORG, ADO_PROJECT, ADO_PAT]):
+        raise HTTPException(
+            status_code=400,
+            detail="ADO_ORG, ADO_PROJECT, and ADO_PAT must be set in poc/.env before pushing to Azure DevOps",
+        )
+
+    background_tasks.add_task(_run_ado_push_stage3_sync, project_id, area_path)
+    return {"status": "pushing", "message": "ADO push started. Poll /stage3-status for completion."}
+
+
+def _run_ado_push_stage3_sync(project_id: str, area_path: str) -> None:
+    """Run the synchronous Stage 3 ADO push in a background thread."""
+    try:
+        result = _push_to_ado_stage3(project_id, area_path=area_path)
+        _logger.info(
+            "Stage 3 ADO push complete for %s: %d sprints, %d tasks, %d errors",
+            project_id,
+            result.get("sprints_pushed", 0),
+            result.get("tasks_pushed", 0),
+            len(result.get("errors", [])),
+        )
+        for err in result.get("errors", []):
+            _logger.warning("Stage 3 ADO push error: %s", err)
+    except Exception:
+        _logger.exception("Stage 3 ADO push failed for project %s", project_id)
 
 
 @router.get("/sprints", response_model=list[SprintResponse])

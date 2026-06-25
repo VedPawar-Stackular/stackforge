@@ -2113,6 +2113,84 @@ with tab_sprints:
                             unsafe_allow_html=True,
                         )
 
+            # ── ADO Push — Sprints as Iterations, Tasks as Task work items ──
+            st.divider()
+            st.markdown('<div class="sf-section-header">Push to Azure DevOps</div>', unsafe_allow_html=True)
+
+            s3_ado_pushed = s3.get("ado_pushed", False)
+
+            # Flash message from previous push attempt
+            _s3_push_msg = st.session_state.pop("_s3_ado_push_result", None)
+            if _s3_push_msg:
+                if _s3_push_msg.get("errors"):
+                    st.warning(
+                        f"Pushed {_s3_push_msg['sprints_pushed']} sprint iterations, "
+                        f"{_s3_push_msg['tasks_pushed']} tasks — "
+                        f"{len(_s3_push_msg['errors'])} errors."
+                    )
+                    for _err in _s3_push_msg["errors"][:5]:
+                        st.caption(f"  • {_err}")
+                else:
+                    st.success(
+                        f"Pushed {_s3_push_msg['sprints_pushed']} sprint iterations and "
+                        f"{_s3_push_msg['tasks_pushed']} tasks to Azure DevOps."
+                    )
+
+            _s3_ap_key = f"_s3_ado_area_path_{project_id}"
+            if _s3_ap_key not in st.session_state:
+                st.session_state[_s3_ap_key] = st.session_state.get("project_name", "")
+            with st.expander("⚙️ ADO Settings", expanded=False):
+                st.text_input(
+                    "Area path (sub-area under your ADO project)",
+                    key=_s3_ap_key,
+                    placeholder="e.g. MediBook",
+                    help=(
+                        "StackForge will create StackForge\\<area path> in ADO automatically. "
+                        "Clear this field to push to the ADO project default area instead."
+                    ),
+                )
+                st.caption(
+                    "Sprints push as ADO **Iterations**. Tasks push as **Task** work items linked "
+                    "to their parent User Story. If stories haven't been pushed to ADO yet "
+                    "(via Epics & Stories tab), tasks will push without parent links."
+                )
+                st.caption(
+                    "If auto-create fails (permissions), create the area in ADO first: "
+                    "**Project Settings → Boards → Area → New child node**, then push."
+                )
+            _s3_area_path = st.session_state.get(_s3_ap_key, "")
+
+            _s3_ado_label = "✓ Pushed to ADO" if s3_ado_pushed else "🚀  Push Sprints & Tasks to Azure DevOps"
+            _s3_ado_type = "secondary" if s3_ado_pushed else "primary"
+            _s3_push_url = f"/projects/{project_id}/push-sprints-to-ado"
+            if _s3_area_path:
+                _s3_push_url += f"?area_path={_s3_area_path}"
+            if st.button(_s3_ado_label, key="btn_s3_push_ado", type=_s3_ado_type, use_container_width=True):
+                push_result = api_post(_s3_push_url)
+                if push_result is None:
+                    st.error(
+                        "Could not reach API server. Make sure it is running: "
+                        "`python -m uvicorn api.main:app --reload`"
+                    )
+                elif push_result.get("status") == "pushing":
+                    st.info("ADO push started in background. Refresh in a few seconds to see updated status.")
+                    invalidate_cache(
+                        f"/projects/{project_id}/stage3-status",
+                        f"/projects/{project_id}/sprints",
+                    )
+                    st.rerun()
+                else:
+                    st.session_state["_s3_ado_push_result"] = {
+                        "sprints_pushed": push_result.get("sprints_pushed", 0),
+                        "tasks_pushed": push_result.get("tasks_pushed", 0),
+                        "errors": push_result.get("errors", []),
+                    }
+                    invalidate_cache(
+                        f"/projects/{project_id}/stage3-status",
+                        f"/projects/{project_id}/sprints",
+                    )
+                    st.rerun()
+
             # ── Token cost report ──────────────────────────────────────────
             st.divider()
             st.markdown('<div class="sf-section-header">Token Cost Optimization Report</div>', unsafe_allow_html=True)

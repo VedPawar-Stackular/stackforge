@@ -17,8 +17,9 @@ import logging
 import time
 import uuid
 
-from config import MODEL_CAPABLE, SPRINT_CAPACITY_DEFAULT
+from config import ADO_ORG, ADO_PAT, ADO_PROJECT, MODEL_CAPABLE, SPRINT_CAPACITY_DEFAULT
 from db import DB
+from pipeline.ado_client import create_task, ensure_area_path, ensure_iteration_path
 from pipeline.sprint_planner import assign_stories_to_sprints
 from pipeline.task_generator import generate_tasks_for_all_stories
 
@@ -167,6 +168,129 @@ async def run_stage3(project_id: str, sprint_capacity: int = SPRINT_CAPACITY_DEF
                 (project_id,),
             )
         raise
+
+
+def push_to_ado_stage3(project_id: str, area_path: str = "") -> dict:
+    """
+    Push all sprints (as ADO Iterations) and tasks (as ADO Task work items) to ADO.
+
+    Sprints → ADO Iterations via ensure_iteration_path().
+    Tasks   → ADO Task work items linked to their parent User Story.
+
+    Prerequisite: Stage 2 ADO push should be done first so stories have
+    ado_work_item_url. Tasks whose parent story has no ADO URL are pushed
+    standalone (no parent link) and the story title is added to errors[].
+
+    Idempotent — skips sprints and tasks already pushed (ado_work_item_id set).
+    Returns {"sprints_pushed": N, "tasks_pushed": M, "errors": [...]}.
+    """
+    if not all([ADO_ORG, ADO_PROJECT, ADO_PAT]):
+        raise ValueError(
+            "ADO_ORG, ADO_PROJECT, and ADO_PAT must be set in poc/.env "
+            "before pushing to Azure DevOps"
+        )
+
+    with DB() as db:
+        proj_row = db.fetch_one("SELECT name FROM projects WHERE id = %s", (project_id,))
+        sprints = db.fetch_all(
+            "SELECT * FROM sprints WHERE project_id = %s ORDER BY sprint_number",
+            (project_id,),
+        )
+
+    project_name = proj_row["name"] if proj_row else project_id
+
+    # Resolve area_path — same fallback pattern as Stage 2 push_to_ado()
+    if not area_path:
+        area_path = project_name
+    try:
+        area_path = ensure_area_path(area_path)
+    except Exception as e:
+        _logger.warning(
+            "Could not create ADO area path '%s' (%s) — tasks will use project default area",
+            area_path, e,
+        )
+        area_path = ""
+
+    tags = project_name
+    sprints_pushed = 0
+    tasks_pushed = 0
+    errors: list[str] = []
+
+    for sprint in sprints:
+        sprint_id = str(sprint["id"])
+        sprint_name = sprint["name"]
+
+        # Idempotency: ado_work_item_id = -1 means iteration already created
+        if sprint.get("ado_work_item_id") is not None:
+            iteration_path = sprint.get("ado_iteration_path") or ""
+        else:
+            try:
+                iteration_path = ensure_iteration_path(sprint_name)
+                with DB() as db:
+                    db.execute(
+                        """
+                        UPDATE sprints
+                        SET ado_work_item_id = -1, ado_work_item_url = '', ado_iteration_path = %s
+                        WHERE id = %s
+                        """,
+                        (iteration_path, sprint_id),
+                    )
+                sprints_pushed += 1
+            except Exception as e:
+                _logger.warning("Could not create ADO iteration '%s' (%s) — tasks won't be assigned to sprint", sprint_name, e)
+                iteration_path = ""
+
+        # Fetch all tasks for stories in this sprint
+        with DB() as db:
+            sprint_tasks = db.fetch_all(
+                """
+                SELECT t.id, t.title, t.description, t.task_type, t.estimated_hours,
+                       t.ado_work_item_id, t.story_id,
+                       us.title AS story_title, us.ado_work_item_url AS story_ado_url
+                FROM tasks t
+                JOIN sprint_stories ss ON ss.story_id = t.story_id
+                JOIN user_stories us ON us.id = t.story_id
+                WHERE ss.sprint_id = %s
+                ORDER BY t.created_at
+                """,
+                (sprint_id,),
+            )
+
+        for task in sprint_tasks:
+            task_id = str(task["id"])
+
+            # Idempotency: skip tasks already pushed
+            if task.get("ado_work_item_id") is not None:
+                continue
+
+            story_ado_url = task.get("story_ado_url") or ""
+            if not story_ado_url:
+                errors.append(
+                    f"Task '{task['title']}': parent story '{task['story_title']}' "
+                    "not yet pushed to ADO — push epics/stories first for parent links"
+                )
+
+            try:
+                ado_task_id, ado_task_url = create_task(
+                    title=task["title"],
+                    description=task.get("description", ""),
+                    task_type=task.get("task_type", "backend"),
+                    estimated_hours=float(task.get("estimated_hours") or 4.0),
+                    parent_work_item_url=story_ado_url,
+                    area_path=area_path,
+                    iteration_path=iteration_path,
+                    tags=tags,
+                )
+                with DB() as db:
+                    db.execute(
+                        "UPDATE tasks SET ado_work_item_id = %s, ado_work_item_url = %s WHERE id = %s",
+                        (ado_task_id, ado_task_url, task_id),
+                    )
+                tasks_pushed += 1
+            except Exception as e:
+                errors.append(f"Task '{task['title']}': {e}")
+
+    return {"sprints_pushed": sprints_pushed, "tasks_pushed": tasks_pushed, "errors": errors}
 
 
 def _log_metrics(

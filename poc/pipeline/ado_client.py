@@ -93,6 +93,75 @@ def create_epic(title: str, description: str, area_path: str = "", tags: str = "
     return _post_work_item("Epic", body)
 
 
+def ensure_iteration_path(iteration_name: str) -> str:
+    """
+    Create a child iteration node under the root ADO project iterations if it doesn't exist.
+    Idempotent — 409 Conflict (already exists) is treated as success.
+    Returns the full iteration path string: "{ADO_PROJECT}\\{iteration_name}".
+    """
+    url = (
+        f"https://dev.azure.com/{ADO_ORG}/{ADO_PROJECT}/_apis/wit/classificationnodes/iterations"
+        f"?api-version={ADO_API_VERSION}"
+    )
+    headers = {
+        "Authorization": _auth_header(),
+        "Content-Type": "application/json",
+    }
+    with httpx.Client(timeout=30) as client:
+        response = client.post(url, headers=headers, content=json.dumps({"name": iteration_name}))
+        if response.status_code not in (200, 201, 409):
+            response.raise_for_status()
+    return f"{ADO_PROJECT}\\{iteration_name}"
+
+
+def create_task(
+    title: str,
+    description: str,
+    task_type: str,
+    estimated_hours: float,
+    parent_work_item_url: str = "",
+    area_path: str = "",
+    iteration_path: str = "",
+    tags: str = "",
+) -> tuple[int, str]:
+    """
+    Create a Task work item. Returns (work_item_id, work_item_url).
+    parent_work_item_url: if set, links task as child of the parent (User Story).
+    iteration_path: if set, assigns task to the sprint iteration.
+    area_path: if empty, omitted and ADO uses project default.
+    """
+    body = [
+        {"op": "add", "path": "/fields/System.Title", "value": title},
+        {
+            "op": "add",
+            "path": "/fields/System.Description",
+            "value": html.escape(f"[{task_type}] {description}"),
+        },
+        {
+            "op": "add",
+            "path": "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate",
+            "value": estimated_hours,
+        },
+    ]
+    if area_path:
+        body.append({"op": "add", "path": "/fields/System.AreaPath", "value": area_path})
+    if iteration_path:
+        body.append({"op": "add", "path": "/fields/System.IterationPath", "value": iteration_path})
+    if tags:
+        body.append({"op": "add", "path": "/fields/System.Tags", "value": tags})
+    if parent_work_item_url:
+        body.append({
+            "op": "add",
+            "path": "/relations/-",
+            "value": {
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": parent_work_item_url,
+                "attributes": {"comment": ""},
+            },
+        })
+    return _post_work_item("Task", body)
+
+
 def create_user_story(
     title: str,
     description: str,

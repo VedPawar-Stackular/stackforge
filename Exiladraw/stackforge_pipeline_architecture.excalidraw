@@ -1,0 +1,957 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "mcp-excalidraw-server",
+  "elements": [
+    {
+      "id": "bg-pipe",
+      "type": "rectangle",
+      "x": 40,
+      "y": 75,
+      "width": 530,
+      "height": 905,
+      "backgroundColor": "#e9ecef",
+      "strokeColor": "#868e96",
+      "roughness": 0,
+      "opacity": 20,
+      "createdAt": "2026-06-24T10:55:44.337Z",
+      "updatedAt": "2026-06-24T10:55:44.338Z",
+      "version": 1
+    },
+    {
+      "id": "bg-opts",
+      "type": "rectangle",
+      "x": 600,
+      "y": 75,
+      "width": 415,
+      "height": 375,
+      "backgroundColor": "#eebefa",
+      "strokeColor": "#9c36b5",
+      "roughness": 0,
+      "opacity": 30,
+      "createdAt": "2026-06-24T10:55:44.338Z",
+      "updatedAt": "2026-06-24T10:55:44.338Z",
+      "version": 1
+    },
+    {
+      "id": "bg-metrics",
+      "type": "rectangle",
+      "x": 600,
+      "y": 460,
+      "width": 415,
+      "height": 355,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "roughness": 0,
+      "opacity": 30,
+      "createdAt": "2026-06-24T10:55:44.338Z",
+      "updatedAt": "2026-06-24T10:55:44.338Z",
+      "version": 1
+    },
+    {
+      "id": "bg-rag",
+      "type": "rectangle",
+      "x": 600,
+      "y": 825,
+      "width": 415,
+      "height": 155,
+      "backgroundColor": "#99e9f2",
+      "strokeColor": "#0c8599",
+      "roughness": 0,
+      "opacity": 30,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "s1",
+      "type": "rectangle",
+      "x": 60,
+      "y": 110,
+      "width": 480,
+      "height": 80,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "s2",
+      "type": "rectangle",
+      "x": 60,
+      "y": 255,
+      "width": 480,
+      "height": 80,
+      "backgroundColor": "#eebefa",
+      "strokeColor": "#9c36b5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "s3",
+      "type": "rectangle",
+      "x": 60,
+      "y": 400,
+      "width": 480,
+      "height": 80,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "s4",
+      "type": "rectangle",
+      "x": 60,
+      "y": 545,
+      "width": 480,
+      "height": 80,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "orch",
+      "type": "rectangle",
+      "x": 120,
+      "y": 655,
+      "width": 360,
+      "height": 60,
+      "backgroundColor": "#fff9db",
+      "strokeColor": "#e8590c",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "s5",
+      "type": "rectangle",
+      "x": 60,
+      "y": 748,
+      "width": 480,
+      "height": 80,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "s6",
+      "type": "rectangle",
+      "x": 60,
+      "y": 892,
+      "width": 480,
+      "height": 80,
+      "backgroundColor": "#99e9f2",
+      "strokeColor": "#0c8599",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "opt1",
+      "type": "rectangle",
+      "x": 615,
+      "y": 110,
+      "width": 385,
+      "height": 60,
+      "backgroundColor": "#ffffff",
+      "strokeColor": "#9c36b5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "opt2",
+      "type": "rectangle",
+      "x": 615,
+      "y": 185,
+      "width": 385,
+      "height": 60,
+      "backgroundColor": "#ffffff",
+      "strokeColor": "#9c36b5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "opt3",
+      "type": "rectangle",
+      "x": 615,
+      "y": 260,
+      "width": 385,
+      "height": 60,
+      "backgroundColor": "#ffffff",
+      "strokeColor": "#9c36b5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "opt4",
+      "type": "rectangle",
+      "x": 615,
+      "y": 335,
+      "width": 385,
+      "height": 60,
+      "backgroundColor": "#ffffff",
+      "strokeColor": "#9c36b5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "m1",
+      "type": "rectangle",
+      "x": 615,
+      "y": 490,
+      "width": 385,
+      "height": 65,
+      "backgroundColor": "#ffffff",
+      "strokeColor": "#2f9e44",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "m2",
+      "type": "rectangle",
+      "x": 615,
+      "y": 568,
+      "width": 385,
+      "height": 65,
+      "backgroundColor": "#ffffff",
+      "strokeColor": "#2f9e44",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "m3",
+      "type": "rectangle",
+      "x": 615,
+      "y": 646,
+      "width": 385,
+      "height": 65,
+      "backgroundColor": "#ffffff",
+      "strokeColor": "#2f9e44",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "m4",
+      "type": "rectangle",
+      "x": 615,
+      "y": 724,
+      "width": 385,
+      "height": 45,
+      "backgroundColor": "#f8f9fa",
+      "strokeColor": "#868e96",
+      "roughness": 0,
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "mqryjaa4trzmhy11yo",
+      "type": "arrow",
+      "x": 300,
+      "y": 198,
+      "strokeColor": "#868e96",
+      "strokeWidth": 1,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          49
+        ]
+      ],
+      "start": {
+        "id": "s1"
+      },
+      "end": {
+        "id": "s2"
+      },
+      "endArrowhead": "arrow",
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "mqryjaa4famys02a9h",
+      "type": "arrow",
+      "x": 300,
+      "y": 343,
+      "strokeColor": "#868e96",
+      "strokeWidth": 1,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          49
+        ]
+      ],
+      "start": {
+        "id": "s2"
+      },
+      "end": {
+        "id": "s3"
+      },
+      "endArrowhead": "arrow",
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "mqryjaa4lta93na4qk",
+      "type": "arrow",
+      "x": 300,
+      "y": 488,
+      "strokeColor": "#868e96",
+      "strokeWidth": 1,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          49
+        ]
+      ],
+      "start": {
+        "id": "s3"
+      },
+      "end": {
+        "id": "s4"
+      },
+      "endArrowhead": "arrow",
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "mqryjaa4hpptodzya9",
+      "type": "arrow",
+      "x": 300,
+      "y": 633,
+      "strokeColor": "#e8590c",
+      "strokeWidth": 1,
+      "strokeStyle": "dashed",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          14
+        ]
+      ],
+      "start": {
+        "id": "s4"
+      },
+      "end": {
+        "id": "orch"
+      },
+      "endArrowhead": "arrow",
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "mqryjaa4m4ym8kcjf48",
+      "type": "arrow",
+      "x": 300,
+      "y": 723,
+      "strokeColor": "#2f9e44",
+      "strokeWidth": 1,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          17
+        ]
+      ],
+      "start": {
+        "id": "orch"
+      },
+      "end": {
+        "id": "s5"
+      },
+      "endArrowhead": "arrow",
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "mqryjaa4ghv6sdqjrzj",
+      "type": "arrow",
+      "x": 300,
+      "y": 836,
+      "strokeColor": "#868e96",
+      "strokeWidth": 1,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          48
+        ]
+      ],
+      "start": {
+        "id": "s5"
+      },
+      "end": {
+        "id": "s6"
+      },
+      "endArrowhead": "arrow",
+      "createdAt": "2026-06-24T10:55:44.339Z",
+      "updatedAt": "2026-06-24T10:55:44.339Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y3kl8yafqnik",
+      "type": "text",
+      "x": 120,
+      "y": 28,
+      "strokeColor": "#1e1e1e",
+      "text": "StackForge  —  AI Pipeline & Cost Architecture",
+      "fontSize": 22,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yq6co12imyse",
+      "type": "text",
+      "x": 205,
+      "y": 86,
+      "strokeColor": "#868e96",
+      "text": "PIPELINE FLOW",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yuj8pw0br37g",
+      "type": "text",
+      "x": 665,
+      "y": 86,
+      "strokeColor": "#9c36b5",
+      "text": "4 CORE OPTIMISATIONS",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ydxtuqkq8ua",
+      "type": "text",
+      "x": 645,
+      "y": 468,
+      "strokeColor": "#2f9e44",
+      "text": "COST SAVINGS  (MEASURED)",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yb5gh7p3a09",
+      "type": "text",
+      "x": 665,
+      "y": 834,
+      "strokeColor": "#0c8599",
+      "text": "RAG KNOWLEDGE BASE",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yo6m4iacvdo9",
+      "type": "text",
+      "x": 80,
+      "y": 123,
+      "strokeColor": "#1971c2",
+      "text": "Stage 1  ·  Requirement Ingestion",
+      "fontSize": 15,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y1tbyvo95oku",
+      "type": "text",
+      "x": 80,
+      "y": 149,
+      "strokeColor": "#1e1e1e",
+      "text": "Map-reduce chunks  ·  BM25 dedup  ·  Content hash cache",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y63asgsanc93",
+      "type": "text",
+      "x": 80,
+      "y": 268,
+      "strokeColor": "#9c36b5",
+      "text": "Stage 2  ·  Epic & User Story Generation  →  ADO",
+      "fontSize": 15,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ydwy4i52snni",
+      "type": "text",
+      "x": 80,
+      "y": 294,
+      "strokeColor": "#1e1e1e",
+      "text": "Hierarchical gen  ·  Parallel asyncio  ·  87% cost savings",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ybj12h9p7zdd",
+      "type": "text",
+      "x": 80,
+      "y": 413,
+      "strokeColor": "#e8590c",
+      "text": "Stage 3  ·  Sprint & Task Planning",
+      "fontSize": 15,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yhindasqzt9m",
+      "type": "text",
+      "x": 80,
+      "y": 439,
+      "strokeColor": "#1e1e1e",
+      "text": "RAG-based estimation from past sprint velocity",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yelit120ozpa",
+      "type": "text",
+      "x": 80,
+      "y": 558,
+      "strokeColor": "#2f9e44",
+      "text": "Stage 4  ·  AI-Assisted Dev  (Multica / Claude Code)",
+      "fontSize": 15,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yxorxjg42onf",
+      "type": "text",
+      "x": 80,
+      "y": 584,
+      "strokeColor": "#1e1e1e",
+      "text": "RAG skill load  ·  Session file cache  ·  Hierarchical agents",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ytsp9o4vqkv",
+      "type": "text",
+      "x": 140,
+      "y": 666,
+      "strokeColor": "#e8590c",
+      "text": "Orchestrator Agent (Haiku)  ·  SE Review via Lark",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y57o4cbvhzwb",
+      "type": "text",
+      "x": 140,
+      "y": 688,
+      "strokeColor": "#1e1e1e",
+      "text": "Loop: dev done  →  SE approves  →  Stage 5 proceeds",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yxbwtrm4dkr",
+      "type": "text",
+      "x": 80,
+      "y": 761,
+      "strokeColor": "#e03131",
+      "text": "Stage 5  ·  QA & Bug Loop",
+      "fontSize": 15,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ycsd01cy7brq",
+      "type": "text",
+      "x": 80,
+      "y": 787,
+      "strokeColor": "#1e1e1e",
+      "text": "Per-AC test gen  ·  Adapt from library  ·  18 lines not 420  (~95% savings)",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ydx5eb7ru3zh",
+      "type": "text",
+      "x": 80,
+      "y": 905,
+      "strokeColor": "#0c8599",
+      "text": "Stage 6  ·  PR Gen + RAG Knowledge Base",
+      "fontSize": 15,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y7a9vs7a4t6d",
+      "type": "text",
+      "x": 80,
+      "y": 931,
+      "strokeColor": "#1e1e1e",
+      "text": "Diff summaries  ·  Content-hash embed  ·  BM25 + Pinecone",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ys6x5ux3ttbf",
+      "type": "text",
+      "x": 490,
+      "y": 670,
+      "strokeColor": "#e03131",
+      "text": "needs revision",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yji6e2x5n45",
+      "type": "text",
+      "x": 190,
+      "y": 218,
+      "strokeColor": "#868e96",
+      "text": "Human Checkpoint",
+      "fontSize": 11,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yisp1i1883yd",
+      "type": "text",
+      "x": 190,
+      "y": 363,
+      "strokeColor": "#868e96",
+      "text": "Human Checkpoint",
+      "fontSize": 11,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yy94twkb7vuq",
+      "type": "text",
+      "x": 190,
+      "y": 508,
+      "strokeColor": "#868e96",
+      "text": "Human Checkpoint",
+      "fontSize": 11,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yc44940beqfb",
+      "type": "text",
+      "x": 200,
+      "y": 856,
+      "strokeColor": "#868e96",
+      "text": "Human Checkpoint",
+      "fontSize": 11,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yu0mn9vhpyvm",
+      "type": "text",
+      "x": 630,
+      "y": 120,
+      "strokeColor": "#9c36b5",
+      "text": "Model Routing",
+      "fontSize": 14,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yi2l9sg1wqjg",
+      "type": "text",
+      "x": 630,
+      "y": 141,
+      "strokeColor": "#1e1e1e",
+      "text": "Haiku = classify/extract   ·   Sonnet = generate   ·   Opus = architect",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yzl42kkj74lh",
+      "type": "text",
+      "x": 630,
+      "y": 195,
+      "strokeColor": "#9c36b5",
+      "text": "Prompt Caching",
+      "fontSize": 14,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yc6phazqe6nn",
+      "type": "text",
+      "x": 630,
+      "y": 216,
+      "strokeColor": "#1e1e1e",
+      "text": "90% cost reduction on repeated context (cache hits)",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y7w97f47398l",
+      "type": "text",
+      "x": 630,
+      "y": 270,
+      "strokeColor": "#9c36b5",
+      "text": "Batch API",
+      "fontSize": 14,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y27us02wblesj",
+      "type": "text",
+      "x": 630,
+      "y": 291,
+      "strokeColor": "#1e1e1e",
+      "text": "50% cheaper — all non-realtime generation tasks",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.434Z",
+      "updatedAt": "2026-06-24T10:56:33.434Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yy0sx31ip1rp",
+      "type": "text",
+      "x": 630,
+      "y": 345,
+      "strokeColor": "#9c36b5",
+      "text": "Structured JSON Outputs",
+      "fontSize": 14,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y0yu5x1lybelc",
+      "type": "text",
+      "x": 630,
+      "y": 366,
+      "strokeColor": "#1e1e1e",
+      "text": "Strict schemas + max_tokens caps — no prose waste",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yp7ox93uphgr",
+      "type": "text",
+      "x": 630,
+      "y": 500,
+      "strokeColor": "#2f9e44",
+      "text": "87% savings  —  Stage 2",
+      "fontSize": 14,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ywpq8sj90vcc",
+      "type": "text",
+      "x": 630,
+      "y": 523,
+      "strokeColor": "#1e1e1e",
+      "text": "Epic & Story gen vs naive approach  (measured)",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yx3tz2n8arr",
+      "type": "text",
+      "x": 630,
+      "y": 578,
+      "strokeColor": "#2f9e44",
+      "text": "~95% savings  —  Stage 5 bug fix",
+      "fontSize": 14,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yk0z1kt3lu69",
+      "type": "text",
+      "x": 630,
+      "y": 601,
+      "strokeColor": "#1e1e1e",
+      "text": "18-line failing fn sent vs 420-line full file",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ya4bfyljv6jk",
+      "type": "text",
+      "x": 630,
+      "y": 656,
+      "strokeColor": "#2f9e44",
+      "text": "3-5% of naive cost  (all 4 stacked)",
+      "fontSize": 14,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5yawzhxx3evcp",
+      "type": "text",
+      "x": 630,
+      "y": 679,
+      "strokeColor": "#1e1e1e",
+      "text": "Routing  x  Caching  x  Batch  x  JSON output",
+      "fontSize": 12,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y8rsin5jdehf",
+      "type": "text",
+      "x": 630,
+      "y": 737,
+      "strokeColor": "#868e96",
+      "text": "Validated: MediBook Apex Health  (SOW / BRD / Spec / Transcript)",
+      "fontSize": 11,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5ymtvc457r3lh",
+      "type": "text",
+      "x": 615,
+      "y": 852,
+      "strokeColor": "#0c8599",
+      "text": "Feeds:  Stage 3 sprint est.  ·  Stage 4 skill retrieval  ·  Stage 5 test adapt.",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    },
+    {
+      "id": "mqrykc5y7uk6czss6yd",
+      "type": "text",
+      "x": 615,
+      "y": 876,
+      "strokeColor": "#0c8599",
+      "text": "Grows automatically across all clients and projects.",
+      "fontSize": 13,
+      "createdAt": "2026-06-24T10:56:33.435Z",
+      "updatedAt": "2026-06-24T10:56:33.435Z",
+      "version": 1
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  }
+}

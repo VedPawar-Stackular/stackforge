@@ -191,6 +191,12 @@ class AdoPushResponse(BaseModel):
     errors: list[str]
 
 
+class Stage3AdoPushResponse(BaseModel):
+    sprints_pushed: int
+    tasks_pushed: int
+    errors: list[str]
+
+
 # ─── Stage 3: Sprint & Task Planning ─────────────────────────────────────────
 
 class SprintResponse(BaseModel):
@@ -232,6 +238,7 @@ class Stage3StatusResponse(BaseModel):
     sprint_count: int
     task_count: int
     total_stories_planned: int
+    ado_pushed: bool = False
 
 
 class Stage3MetricsResponse(BaseModel):
