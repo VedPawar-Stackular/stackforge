@@ -109,12 +109,18 @@ Output:
 
 _RAG_CONTEXT_TOP_K = 3
 
+# Groq free tier: 12,000 TPM on llama-3.3-70b-versatile. Each story call uses
+# ~1,500 tokens. With Semaphore(2) and a 15s hold after each call we get
+# ~2 releases per 18s = ~6.7 calls/min = ~10,000 TPM — safely under the cap.
+_SEMAPHORE_SIZE = 2
+_THROTTLE_DELAY_S = 15.0
+
 
 async def _generate_for_story(
     story: dict,
     project_id: str,
     semaphore: asyncio.Semaphore,
-    retries: int = 4,
+    retries: int = 6,
 ) -> tuple[list[dict], int, int, int, int]:
     """
     Generate development tasks for one user story.
@@ -163,6 +169,10 @@ async def _generate_for_story(
                     ],
                 )
                 duration_ms = int((time.monotonic() - t0) * 1000)
+                # Hold the slot for _THROTTLE_DELAY_S after the call completes.
+                # This spreads concurrent releases across time so the next waiter
+                # doesn't immediately saturate the TPM window.
+                await asyncio.sleep(_THROTTLE_DELAY_S)
 
             in_tok, out_tok, think_tok = extract_usage(response)
             content = response.choices[0].message.content
@@ -203,7 +213,9 @@ async def _generate_for_story(
         except RateLimitError:
             if attempt == retries - 1:
                 raise
-            wait = (2 ** attempt) + random.uniform(0, 1)
+            # Longer backoff — Groq TPM window resets every 60s so we need
+            # to wait long enough for capacity to free up.
+            wait = min(60.0, (2 ** attempt) * 5) + random.uniform(0, 2)
             await asyncio.sleep(wait)
 
     return [], 0, 0, 0, 0
@@ -221,7 +233,7 @@ async def generate_tasks_for_all_stories(
 
     Returns list of (story, tasks, input_tokens, output_tokens, thinking_tokens, duration_ms).
     """
-    semaphore = asyncio.Semaphore(5)
+    semaphore = asyncio.Semaphore(_SEMAPHORE_SIZE)
 
     task_coros = [
         _generate_for_story(story, project_id, semaphore)
